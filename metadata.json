@@ -1,0 +1,6 @@
+{
+  "name": "medi AI - SastaRx Ops & Discovery Platform",
+  "description": "Multi-tenant clinical operations control center and patient generic medicine bioequivalence discovery platform with reliable cost comparisons.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

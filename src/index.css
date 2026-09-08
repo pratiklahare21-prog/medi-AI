@@ -1,0 +1,85 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Inter', sans-serif;
+    color: #0F172A;
+    background-color: #F8FAFC;
+    overscroll-behavior: none;
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Utility font families */
+.font-display-lg {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.font-headline-md {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.font-headline-sm {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.font-title-md {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.font-body-md {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+}
+
+.font-body-sm {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+}
+
+.font-code-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500;
+}
+
+.font-label-md {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.font-label-xs {
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.font-table-data {
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
