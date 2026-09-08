@@ -186,3 +186,26 @@ export interface MedicineVolatilitySummary {
   trendDirection: 'down' | 'up' | 'stable';
   primaryDriver: string;
 }
+
+export type UserRole = 
+  | 'Lead Ops Admin'
+  | 'Clinical Pharmacist'
+  | 'Prescribing Physician'
+  | 'Formulary Director'
+  | 'Patient / Consumer';
+
+export interface UserAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  title: string;
+  avatarUrl?: string;
+  licenseNumber?: string;
+  tenantId: string;
+  tenantName: string;
+  department?: string;
+  phone?: string;
+  joinedAt: string;
+  password?: string; // used for demo auth verification
+}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { OpsNavigationTab } from '../types';
+import { OpsNavigationTab, UserAccount } from '../types';
 
 interface SidebarProps {
   currentTab: OpsNavigationTab;
@@ -7,6 +7,8 @@ interface SidebarProps {
   accuracyDisputeCount: number;
   priceAlertsCount?: number;
   onOpenPriceAlerts?: () => void;
+  currentUser?: UserAccount | null;
+  onLogout?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -14,7 +16,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onTabChange,
   accuracyDisputeCount,
   priceAlertsCount = 0,
-  onOpenPriceAlerts
+  onOpenPriceAlerts,
+  currentUser,
+  onLogout
 }) => {
   const navItems = [
     {
@@ -144,6 +148,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {priceAlertsCount}
             </span>
           </button>
+        </div>
+      )}
+
+      {/* User Session Bar */}
+      {currentUser && (
+        <div className="px-3 mb-2">
+          <div className="p-2.5 rounded-lg border border-slate-200 bg-white shadow-2xs flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              {currentUser.avatarUrl ? (
+                <img
+                  alt={currentUser.name}
+                  className="w-7 h-7 rounded-full object-cover ring-1 ring-blue-500 shrink-0"
+                  src={currentUser.avatarUrl}
+                />
+              ) : (
+                <div className="w-7 h-7 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-[10px] shrink-0">
+                  {currentUser.name.replace('Dr. ', '').replace('Pharm. ', '').substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                  {currentUser.name}
+                </div>
+                <div className="text-[10px] text-slate-500 font-code-mono truncate leading-tight">
+                  {currentUser.role}
+                </div>
+              </div>
+            </div>
+            {onLogout && (
+              <button
+                type="button"
+                onClick={onLogout}
+                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+                title="Sign Out / Switch Account"
+              >
+                <span className="material-symbols-outlined text-base">logout</span>
+              </button>
+            )}
+          </div>
         </div>
       )}
 

@@ -6,7 +6,8 @@ import {
   TenantInfo,
   ChronicPack,
   OCRDetectedMedicine,
-  PriceAlert
+  PriceAlert,
+  UserAccount
 } from '../types';
 
 export const INITIAL_TENANTS: TenantInfo[] = [
@@ -621,5 +622,64 @@ export const INITIAL_PRICE_ALERTS: PriceAlert[] = [
     status: 'Active',
     createdAt: 'Yesterday',
     notes: 'Lipid management bulk formulary purchase trigger'
+  }
+];
+
+export const DEFAULT_USERS: UserAccount[] = [
+  {
+    id: 'usr-01',
+    name: 'Dr. Sarah Jenkins',
+    email: 'sarah.jenkins@apollohealth.org',
+    role: 'Lead Ops Admin',
+    title: 'Lead Clinical Ops Director',
+    licenseNumber: 'MCI-40921-A',
+    tenantId: 'TN-4092',
+    tenantName: 'Apollo Health Network',
+    department: 'Clinical Informatics & Formularies',
+    phone: '+91 98201 54321',
+    joinedAt: 'Jan 2024',
+    password: 'Password123!',
+    avatarUrl: 'https://lh3.googleusercontent.com/aida-public/AB6AXuA6Bi5RgveOWVr-hDQZHdfJddZ0PvEIqsO8Wxttzs7x14bVPOiLwwcOiH8nOG7s0jRLvN60FWCC39DhheMdjueMk1QRJDHo1NCwIgkaqlUeukGkxKT7ec3ixuOmkTnEUOfQh5w0WAvBgjXu1EJV489T6Q6E4kr-VcTDb5hh49mO-Mu2PvgIsNAS8qyUz8clLbiFr-FPLKwiwrIIuel3oQv3kl3m33kDudYmFxtFoiIi1_3N1U-ClOAI'
+  },
+  {
+    id: 'usr-02',
+    name: 'Dr. Rajesh Sharma',
+    email: 'rajesh.sharma@fortishealth.com',
+    role: 'Clinical Pharmacist',
+    title: 'Head of Dispensing & Bioequivalence',
+    licenseNumber: 'PCI-88301-B',
+    tenantId: 'TN-3018',
+    tenantName: 'Fortis Memorial Health',
+    department: 'Hospital Formulary & Pharmacy',
+    phone: '+91 97110 82910',
+    joinedAt: 'Mar 2024',
+    password: 'Password123!'
+  },
+  {
+    id: 'usr-03',
+    name: 'Dr. Ananya Iyer',
+    email: 'ananya.iyer@manipalhospitals.com',
+    role: 'Prescribing Physician',
+    title: 'Consultant Cardiologist',
+    licenseNumber: 'MCI-62914-K',
+    tenantId: 'TN-5521',
+    tenantName: 'Manipal Hospital System',
+    department: 'Department of Cardiology',
+    phone: '+91 98450 19283',
+    joinedAt: 'May 2024',
+    password: 'Password123!'
+  },
+  {
+    id: 'usr-04',
+    name: 'Priya Verma',
+    email: 'priya.verma@gmail.com',
+    role: 'Patient / Consumer',
+    title: 'Chronic Care Beneficiary',
+    tenantId: 'TN-4092',
+    tenantName: 'Apollo Health Network (Patient)',
+    department: 'Hypertension & Diabetes Care',
+    phone: '+91 99100 23456',
+    joinedAt: 'Aug 2024',
+    password: 'Password123!'
   }
 ];

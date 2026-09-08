@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AppViewMode, TenantInfo, PriceAlert } from '../types';
+import { AppViewMode, TenantInfo, PriceAlert, UserAccount } from '../types';
 
 interface HeaderProps {
   currentMode: AppViewMode;
@@ -14,6 +14,9 @@ interface HeaderProps {
   anomalyCount: number;
   priceAlerts?: PriceAlert[];
   onOpenPriceAlerts?: () => void;
+  currentUser?: UserAccount | null;
+  onLogout?: () => void;
+  onOpenAuth?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -28,10 +31,14 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenTriage,
   anomalyCount,
   priceAlerts = [],
-  onOpenPriceAlerts
+  onOpenPriceAlerts,
+  currentUser,
+  onLogout,
+  onOpenAuth
 }) => {
   const [tenantDropdownOpen, setTenantDropdownOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-[#0F172A] text-white flex items-center justify-between px-4 border-b border-[#334155] shadow-sm">
@@ -316,22 +323,123 @@ export const Header: React.FC<HeaderProps> = ({
 
         <div className="h-5 w-px bg-[#334155] hidden sm:block"></div>
 
-        {/* Profile Card */}
-        <div className="flex items-center gap-2 pl-0.5">
-          <img
-            alt="Dr. Sarah Jenkins"
-            className="w-8 h-8 rounded-full object-cover ring-1 ring-slate-600 shrink-0"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6Bi5RgveOWVr-hDQZHdfJddZ0PvEIqsO8Wxttzs7x14bVPOiLwwcOiH8nOG7s0jRLvN60FWCC39DhheMdjueMk1QRJDHo1NCwIgkaqlUeukGkxKT7ec3ixuOmkTnEUOfQh5w0WAvBgjXu1EJV489T6Q6E4kr-VcTDb5hh49mO-Mu2PvgIsNAS8qyUz8clLbiFr-FPLKwiwrIIuel3oQv3kl3m33kDudYmFxtFoiIi1_3N1U-ClOAI"
-          />
-          <div className="hidden xl:flex flex-col text-left">
-            <span className="font-title-md text-xs text-white leading-tight">
-              Dr. Sarah Jenkins
-            </span>
-            <span className="font-code-mono text-[10px] text-[#94A3B8] leading-tight">
-              Lead Ops Admin
-            </span>
+        {/* Profile Card & Session Menu */}
+        {currentUser ? (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+              className="flex items-center gap-2 py-1 px-1.5 rounded-lg hover:bg-[#1E293B] border border-transparent hover:border-[#334155] transition-colors cursor-pointer text-left"
+              title="Account & Session Settings"
+            >
+              {currentUser.avatarUrl ? (
+                <img
+                  alt={currentUser.name}
+                  className="w-8 h-8 rounded-full object-cover ring-1 ring-[#3B82F6] shrink-0"
+                  src={currentUser.avatarUrl}
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1D4ED8] to-[#0EA5E9] text-white flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-[#3B82F6]">
+                  {currentUser.name.replace('Dr. ', '').replace('Pharm. ', '').substring(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="hidden xl:flex flex-col text-left">
+                <span className="font-title-md text-xs text-white leading-tight font-medium">
+                  {currentUser.name}
+                </span>
+                <span className="font-code-mono text-[10px] text-[#93C5FD] leading-tight">
+                  {currentUser.role}
+                </span>
+              </div>
+              <span className="material-symbols-outlined text-[#94A3B8] text-sm">
+                {profileDropdownOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+
+            {/* Profile Dropdown Menu */}
+            {profileDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-72 bg-[#1E293B] border border-[#334155] rounded-xl shadow-2xl p-3 z-50 animate-in fade-in duration-150">
+                {/* User Identity Details */}
+                <div className="flex items-start gap-3 pb-3 border-b border-[#334155]">
+                  {currentUser.avatarUrl ? (
+                    <img
+                      alt={currentUser.name}
+                      className="w-10 h-10 rounded-full object-cover ring-1 ring-blue-500 shrink-0"
+                      src={currentUser.avatarUrl}
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-[#2563EB] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                      {currentUser.name.replace('Dr. ', '').replace('Pharm. ', '').substring(0, 2).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h4 className="text-xs font-bold text-white truncate">{currentUser.name}</h4>
+                    <p className="text-[11px] text-[#94A3B8] truncate font-code-mono">{currentUser.email}</p>
+                    <span className="mt-1 inline-block px-1.5 py-0.2 rounded bg-blue-900/60 text-[#93C5FD] border border-blue-500/40 text-[9px] font-code-mono font-bold uppercase">
+                      {currentUser.role}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Additional Metadata */}
+                <div className="py-2.5 space-y-1.5 text-xs text-[#94A3B8] border-b border-[#334155]">
+                  {currentUser.licenseNumber && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span>Medical License:</span>
+                      <span className="text-white font-code-mono font-medium">{currentUser.licenseNumber}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span>Tenant Partition:</span>
+                    <span className="text-blue-400 font-code-mono font-medium">{currentUser.tenantId}</span>
+                  </div>
+                  {currentUser.department && (
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span>Department:</span>
+                      <span className="text-slate-200 truncate max-w-[140px]">{currentUser.department}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Account Actions */}
+                <div className="pt-2 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      onOpenAuditLogs();
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-[#334155] text-xs text-slate-200 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm text-blue-400">lock_clock</span>
+                    <span>Session Audit Logs</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setProfileDropdownOpen(false);
+                      if (onLogout) onLogout();
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-red-950/60 text-xs text-red-300 hover:text-red-200 border border-transparent hover:border-red-500/40 flex items-center gap-2 transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-sm text-red-400">logout</span>
+                    <span>Sign Out & Switch Account</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onOpenAuth}
+            className="px-3.5 py-1.5 rounded-lg bg-[#2563EB] hover:bg-blue-600 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-2xs cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">login</span>
+            <span>Sign In / Register</span>
+          </button>
+        )}
       </div>
     </header>
   );

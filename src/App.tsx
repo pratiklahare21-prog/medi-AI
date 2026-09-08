@@ -8,7 +8,8 @@ import {
   AccuracyDisputeItem, 
   AuditLogItem, 
   LinkedGenericCompound,
-  PriceAlert 
+  PriceAlert,
+  UserAccount
 } from './types';
 import { 
   INITIAL_TENANTS, 
@@ -17,7 +18,8 @@ import {
   INITIAL_DISPUTES, 
   INITIAL_AUDIT_LOGS, 
   CHRONIC_PACKS,
-  INITIAL_PRICE_ALERTS 
+  INITIAL_PRICE_ALERTS,
+  DEFAULT_USERS
 } from './data/mockData';
 
 import { Header } from './components/Header';
@@ -29,6 +31,7 @@ import { DisputesTriageView } from './components/DisputesTriageView';
 import { ArchitectureView } from './components/ArchitectureView';
 import { PatientPortalView } from './components/PatientPortalView';
 import { MultiTenantConfigView } from './components/MultiTenantConfigView';
+import { AuthView } from './components/AuthView';
 
 import { BioavailabilityModal } from './components/BioavailabilityModal';
 import { AddMedicineModal } from './components/AddMedicineModal';
@@ -42,6 +45,26 @@ export default function App() {
   const [opsTab, setOpsTab] = useState<OpsNavigationTab>('dashboard-and-analytics');
   const [currentTenant, setCurrentTenant] = useState<TenantInfo>(INITIAL_TENANTS[0]);
   const [globalSearch, setGlobalSearch] = useState('');
+
+  // User Authentication & Session State
+  const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>(() => {
+    try {
+      const saved = localStorage.getItem('sastarx_registered_users');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_USERS;
+  });
+
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem('sastarx_current_user');
+      if (saved === 'null') return null;
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return DEFAULT_USERS[0];
+  });
+
+  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState(false);
 
   // Domain state
   const [catalog, setCatalog] = useState<MedicineCatalogEntry[]>(INITIAL_CATALOG);
@@ -66,8 +89,8 @@ export default function App() {
     const newLog: AuditLogItem = {
       id: `audit-${Date.now()}`,
       action,
-      actor: 'Dr. Sarah Jenkins',
-      role: 'Lead Ops Admin',
+      actor: currentUser?.name || 'Dr. Sarah Jenkins',
+      role: currentUser?.role || 'Lead Ops Admin',
       targetEntity: details,
       tenantId: currentTenant.tenantCode,
       tenantName: currentTenant.name,
@@ -76,6 +99,68 @@ export default function App() {
       status: 'Audited'
     };
     setAuditLogs(prev => [newLog, ...prev]);
+  };
+
+  // Auth Handlers
+  const handleLoginSuccess = (user: UserAccount) => {
+    setCurrentUser(user);
+    try {
+      localStorage.setItem('sastarx_current_user', JSON.stringify(user));
+    } catch (e) {}
+    setIsAuthScreenOpen(false);
+
+    // Sync tenant if user has one
+    const matchingTenant = INITIAL_TENANTS.find(t => t.tenantCode === user.tenantId);
+    if (matchingTenant) {
+      setCurrentTenant(matchingTenant);
+    }
+
+    // Role-based view selection
+    if (user.role === 'Patient / Consumer') {
+      setViewMode('patient-portal');
+    } else {
+      setViewMode('clinical-ops');
+    }
+
+    logAction('USER_SESSION_AUTHENTICATED', `Encrypted session initiated by ${user.name} (${user.role}) for partition ${user.tenantName}`);
+  };
+
+  const handleRegisterUser = (newUser: UserAccount) => {
+    setRegisteredUsers(prev => {
+      const updated = [newUser, ...prev];
+      try {
+        localStorage.setItem('sastarx_registered_users', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    logAction('NEW_USER_REGISTERED', `Practitioner registration completed for ${newUser.name} (Council No: ${newUser.licenseNumber || 'N/A'})`);
+  };
+
+  const handleLogout = () => {
+    if (currentUser) {
+      logAction('USER_LOGOUT', `User ${currentUser.name} signed out of clinical session.`);
+    }
+    setCurrentUser(null);
+    try {
+      localStorage.setItem('sastarx_current_user', 'null');
+    } catch (e) {}
+    setIsAuthScreenOpen(true);
+  };
+
+  const handleContinueAsGuest = () => {
+    const guestUser: UserAccount = {
+      id: 'usr-guest',
+      name: 'Guest Clinician',
+      email: 'guest@sastarx.internal',
+      role: 'Clinical Pharmacist',
+      title: 'Visiting Practitioner (Read-Only Mode)',
+      tenantId: currentTenant.tenantCode,
+      tenantName: currentTenant.name,
+      joinedAt: 'Today'
+    };
+    setCurrentUser(guestUser);
+    setIsAuthScreenOpen(false);
+    logAction('GUEST_SESSION_STARTED', 'Exploratory session started without credentials.');
   };
 
   // Price Alert handlers
@@ -242,6 +327,19 @@ export default function App() {
 
   const totalCartSavings = cartItems.reduce((acc, curr) => acc + curr.savings, 0);
 
+  // If user logged out or explicitly opened the auth screen
+  if (currentUser === null || isAuthScreenOpen) {
+    return (
+      <AuthView
+        onLoginSuccess={handleLoginSuccess}
+        onContinueAsGuest={handleContinueAsGuest}
+        availableTenants={INITIAL_TENANTS}
+        registeredUsers={registeredUsers}
+        onRegisterUser={handleRegisterUser}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-body-md antialiased selection:bg-blue-100 selection:text-blue-900">
       {/* Universal Fixed Header */}
@@ -269,6 +367,9 @@ export default function App() {
         anomalyCount={disputes.length}
         priceAlerts={priceAlerts}
         onOpenPriceAlerts={() => setPriceAlertsDrawerOpen(true)}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        onOpenAuth={() => setIsAuthScreenOpen(true)}
       />
 
       {/* Main Container Layout */}
@@ -281,6 +382,8 @@ export default function App() {
             accuracyDisputeCount={disputes.length}
             priceAlertsCount={priceAlerts.length}
             onOpenPriceAlerts={() => setPriceAlertsDrawerOpen(true)}
+            currentUser={currentUser}
+            onLogout={handleLogout}
           />
         )}
 
