@@ -19,6 +19,31 @@ _Changes that are in development but not yet tagged._
 
 ---
 
+## [3.0.0] — 2026-09-09
+
+### Added
+- **Prescription Vision AI Scanner (PatientPortalView)** — Full OCR pipeline with three demo presets (cardio, diabetic, gastric), real file upload (JPEG/PNG/PDF), Gemini 2.5 Flash Vision multimodal extraction when `GEMINI_API_KEY` is configured, and intelligent fallback to curated clinical sample data when offline
+- **OCR Results Table** — Columns: detected brand, active salt + strength, dosage instructions, bioequivalent generic, brand MRP, generic price, savings (₹ + %), confidence badge; inline row editing for brand name and dosage corrections
+- **OCR Cart Action** — "Add All Generics to Cart" with live totals (branded total → generic total → savings %) and "Scan Another" reset flow
+- **AI Clinical Regimen Recommender (PatientPortalView)** — Three-field form (diagnosis, current medications, price sensitivity); calls `POST /api/ai/recommend`; renders summary panel, colour-coded drug-interaction safety card (Safe / Moderate Precaution / High Warning with evidence bullets), and per-medicine recommendation cards
+- **Recommendation Cards** — Show f2 dissolution score, bioequivalence %, branded vs generic strip price, monthly savings, formulary tier, clinical rationale, and individual "Add to Cart" button
+- **AI Natural Language Search (PatientPortalView)** — Dedicated purple "AI Search" button and Enter-key handler; calls `POST /api/ai/search`; renders result banner with parsed-intent badges (category + max-price ceiling) and Gemini explanation text
+- **Gemini AI Dispute Auto-Triage** — `AiDisputeModal` wired end-to-end: "Gemini AI Auto-Triage & Evidence" button in `DisputesTriageView` header and per-dispute detail panel opens modal; modal fetches `POST /api/ai/triage-dispute`, displays anomaly score, AI confidence %, recommended clinical resolution, regulatory impact, and evidence trail; "Apply AI Recommendation" writes the resolution and commits an audit log entry
+- **DEC-012 implemented** — All four Gemini AI endpoints (`/api/ai/ocr`, `/api/ai/recommend`, `/api/ai/search`, `/api/ai/triage-dispute`) fully operational with dual-mode execution (live Gemini 2.5 Flash ↔ deterministic fallback engine)
+
+### Changed
+- `PatientPortalView.tsx` — Complete rewrite fixing all broken field references (`prescribedBrand` → `extractedName`, `medicinesIncluded` → `medicines`, `brandedMrp/genericPrice` → `originalPrice/estimatedMonthlyPrice`, etc.); added AI Recommendations section; added AI search button and NL result banner; added Gemini branding badge on scanner section
+- `App.tsx` — Imports and mounts `AiDisputeModal`; adds `aiTriageDispute` state; passes `onOpenAiTriage` to `DisputesTriageView`; version bumped to `v3.0.0-prod` in footer
+- `src/server/index.ts` — Version bumped to `3.0.0`
+
+### Fixed
+- `handleRunSampleOcr` was undefined — now correctly calls `handleRunOcrPreset('cardio')`
+- OCR results table used wrong field names from an old interface design — corrected to match `OCRDetectedMedicine` type
+- `ChronicPack` cards used `medicinesIncluded`, `brandedMrp`, `savingsAmount` — corrected to `medicines`, `originalPrice`, computed savings
+- `DisputesTriageView` had `onOpenAiTriage` prop typed but `App.tsx` never passed it or rendered `AiDisputeModal` — now fully wired
+
+---
+
 ## [2.5.0] — 2026-09-09
 
 ### Added
@@ -190,10 +215,12 @@ _Changes that are in development but not yet tagged._
 
 | Metric                    | Value     |
 |---------------------------|-----------|
-| Total commits             | 4         |
-| Components                | 17        |
-| TypeScript interfaces     | 12+       |
+| Total versions released   | 6         |
+| Components                | 18        |
+| TypeScript interfaces     | 14+       |
 | Mock data files           | 2         |
-| Lines of TypeScript       | ~5,800+   |
-| npm dependencies          | 10        |
+| Lines of TypeScript       | ~9,000+   |
+| npm dependencies          | 13        |
 | npm devDependencies       | 7         |
+| AI endpoints (Phase 3)    | 4         |
+| Gemini model              | gemini-2.5-flash (vision + text) |

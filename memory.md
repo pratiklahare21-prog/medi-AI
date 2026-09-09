@@ -15,7 +15,7 @@
 - **For patients:** Discover verified generic alternatives to expensive branded medicines, compare prices, set price drop alerts, and access chronic care packs — all backed by bioequivalence data.
 
 **Deployment Target:** Google AI Studio → Cloud Run  
-**Current Version:** `v2.4.0-prod` (displayed in app footer)
+**Current Version:** `v3.0.0-prod` (displayed in app footer)
 
 ---
 
@@ -109,21 +109,30 @@
 - [x] **SEO Meta Tags** — Open Graph, Twitter Card, favicon, meta description
 - [x] **Footer Status Bar** — CDSCO sync status, schema display, RLS enforcement, version number
 
+### AI-Powered Features (Phase 3)
+
+- [x] **Prescription OCR Scanner** — File upload + demo presets (cardio/diabetic/gastric) → Gemini Vision 2.5 Flash → medicine detection table with confidence scores, inline editing, savings calculation, add-all-to-cart
+- [x] **AI Clinical Regimen Recommender** — Diagnosis + current medications + price sensitivity → generic regimen with drug-drug interaction safety check (colour-coded Safe/Warning/Critical), f2 scores, monthly savings, individual add-to-cart per card
+- [x] **AI Natural Language Search** — NL intent parser in Patient Portal: price ceiling detection (`under ₹100`), therapeutic category recognition, Gemini explanation banner with parsed-intent badges
+- [x] **AI Dispute Auto-Triage** — `AiDisputeModal` fully wired: anomaly score, AI confidence %, recommended clinical resolution, regulatory impact, evidence trail, one-click "Apply AI Recommendation"
+
 ---
 
 ## 4. Pending Features 🔲
 
 ### High Priority
 
-- [ ] **Backend API Layer** — Replace mock data with Express REST API + PostgreSQL
-- [ ] **Real Gemini AI Integration** — Prescription OCR, medicine recommendations, AI-powered search
+- [x] **Backend API Layer** — Express REST API + PostgreSQL RLS schema complete (Phase 2)
+- [x] **Prescription OCR Scanner** — Camera/file upload → Gemini Vision → medicine extraction with confidence scores, inline editing, add-all-to-cart
+- [x] **AI Clinical Regimen Recommender** — Condition + current medications → bioequivalent generic regimen with drug-drug interaction safety check, f2 scores, monthly savings
+- [x] **AI Natural Language Search** — NL intent parsing (price ceiling + therapeutic category) with Gemini explanation banner
+- [x] **AI Dispute Auto-Triage** — `AiDisputeModal` with anomaly score, confidence %, evidence trail, one-click apply resolution
 - [ ] **Firebase Authentication** — Replace localStorage auth with Firebase Auth
-- [ ] **Database Schema** — Design and implement PostgreSQL schema with Row-Level Security
+- [ ] **Database Schema Migration** — Connect live PostgreSQL instance with seeded RLS policies
 - [ ] **Real-Time Pricing Feeds** — WebSocket/polling integration with pharmacy APIs
 
 ### Medium Priority
 
-- [ ] **Prescription Upload (OCR)** — Camera/file upload → Gemini Vision → medicine extraction
 - [ ] **Medicine Comparison View** — Side-by-side branded vs. generic comparison
 - [ ] **User Profile Management** — Edit profile, change password, preferences
 - [ ] **Notification System** — In-app notifications for price alerts, dispute updates
@@ -173,8 +182,10 @@
 | GET    | `/api/price-trends`                   | Volatility summaries             | ✅ Live |
 | GET    | `/api/price-trends/:medId`            | Historical price trend data      | ✅ Live |
 | GET    | `/api/health`                         | Service health & RLS monitor     | ✅ Live |
-| POST   | `/api/ai/ocr`                         | Process prescription image       | 🔲 Phase 3 |
-| POST   | `/api/ai/recommend`                   | Get AI medicine recommendations  | 🔲 Phase 3 |
+| POST   | `/api/ai/ocr`                         | Process prescription image       | ✅ Live |
+| POST   | `/api/ai/recommend`                   | Get AI medicine recommendations  | ✅ Live |
+| POST   | `/api/ai/search`                      | Natural language catalog search  | ✅ Live |
+| POST   | `/api/ai/triage-dispute`              | Auto-triage accuracy dispute     | ✅ Live |
 
 ### Gemini AI Endpoint
 
@@ -330,27 +341,31 @@ All tenant-scoped tables include `tenant_id` for PostgreSQL RLS policies. Querie
 
 ## 9. Future Roadmap 🗺️
 
-### Phase 1 — MVP Polish (Current)
-- Finalize all UI views with mock data
-- Establish AI context files (decisions, rules, memory, changelog)
-- Clean up component architecture
+### Phase 1 — MVP Polish (Complete ✅)
+- All 17 UI components built with mock data
+- AI context files established
 
-### Phase 2 — Backend Integration
-- Express REST API with PostgreSQL
-- Firebase Auth integration
-- Real Gemini AI features (prescription OCR, smart recommendations)
-- WebSocket pricing feed connections
+### Phase 2 — Backend Integration (Complete ✅)
+- Express REST API with dual-driver PostgreSQL/local DB
+- JWT + bcrypt dual-mode authentication
+- All CRUD endpoints live
 
-### Phase 3 — Production Readiness
-- PostgreSQL Row-Level Security enforcement
-- DISHA/HIPAA compliance audit
+### Phase 3 — AI-Powered Features (Complete ✅)
+- Prescription OCR with Gemini Vision (+ fallback engine)
+- AI Clinical Regimen Recommender with DDI safety checks
+- Natural language search with intent parsing
+- AI Dispute Auto-Triage with evidence analysis
+
+### Phase 4 — Production Readiness
+- PostgreSQL live instance connection + RLS enforcement
+- Firebase Auth migration
 - Comprehensive test suite (unit + integration + E2E)
 - CI/CD pipeline (GitHub Actions → Cloud Run)
-- Performance optimization (code splitting, lazy loading)
+- DISHA/HIPAA compliance audit
 
-### Phase 4 — Scale & Expand
+### Phase 5 — Scale & Expand
 - Multi-language support (Hindi, Marathi)
 - PWA / mobile app
 - Pharmacy partner onboarding portal
-- Advanced analytics dashboard with ML-driven insights
+- Advanced analytics with ML-driven insights
 - Jan Aushadhi government pricing feed integration

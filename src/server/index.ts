@@ -43,7 +43,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({
     status: 'healthy',
     service: 'medi-AI / SastaRx Clinical Ops Backend',
-    version: '2.5.0',
+    version: '3.0.0',
     timestamp: new Date().toISOString(),
     tenantRLS: 'Enforced (Active Partition)',
     uptime: process.uptime()

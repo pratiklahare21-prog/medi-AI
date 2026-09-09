@@ -375,4 +375,6 @@
 **Dependencies Added:**
 - `@google/genai` (^2.4.0) — already installed and validated.
 
+**Implementation Status:** ✅ Complete (v3.0.0) — All four endpoints delivered with live Gemini 2.5 Flash execution and deterministic fallback engines. Frontend fully wired across PatientPortalView (OCR, Recommendations, AI Search) and DisputesTriageView + AiDisputeModal.
+
 
