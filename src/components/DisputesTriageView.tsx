@@ -4,11 +4,13 @@ import { AccuracyDisputeItem } from '../types';
 interface DisputesTriageViewProps {
   disputes: AccuracyDisputeItem[];
   onResolveDispute: (id: string, resolutionAction: string) => void;
+  onOpenAiTriage?: (dispute: AccuracyDisputeItem) => void;
 }
 
 export const DisputesTriageView: React.FC<DisputesTriageViewProps> = ({
   disputes,
-  onResolveDispute
+  onResolveDispute,
+  onOpenAiTriage
 }) => {
   const [activeDisputeId, setActiveDisputeId] = useState<string>('disp-01');
   const [overrideNote, setOverrideNote] = useState<string>('');
@@ -50,6 +52,16 @@ export const DisputesTriageView: React.FC<DisputesTriageViewProps> = ({
             Pharmacovigilance discrepancy resolution for reported salt formulation and bio-equivalence mismatches
           </p>
         </div>
+
+        {currentDispute && onOpenAiTriage && (
+          <button
+            onClick={() => onOpenAiTriage(currentDispute)}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-all cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-base text-blue-200">psychology</span>
+            <span>Gemini AI Auto-Triage & Evidence</span>
+          </button>
+        )}
       </div>
 
       {/* Main Grid: Queue on Left, Inspection Detail on Right */}
@@ -99,63 +111,39 @@ export const DisputesTriageView: React.FC<DisputesTriageViewProps> = ({
           })}
         </div>
 
-        {/* Right: Detailed Inspection & Resolution Workspace */}
-        <div className="lg:col-span-2 flex flex-col p-5 rounded-lg bg-white border border-slate-200 shadow-2xs">
-          <div className="flex items-start justify-between pb-4 border-b border-slate-200">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 font-code-mono text-[10px] font-bold">
-                  Flagged Item #{currentDispute.id}
-                </span>
-                <span className="text-xs font-code-mono text-slate-400">
-                  Origin: {currentDispute.feedCode}
-                </span>
+        {/* Right: Inspection & Actions */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 p-5 flex flex-col justify-between shadow-2xs">
+          <div>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+              <div>
+                <h3 className="font-bold text-base text-slate-900">{currentDispute.title}</h3>
+                <span className="text-xs text-slate-500 font-code-mono">Dispute ID: #{currentDispute.id}</span>
               </div>
-              <h3 className="font-headline-sm text-base lg:text-lg font-bold text-slate-900">
-                {currentDispute.title}: {currentDispute.medicineAffected}
-              </h3>
-              <p className="text-xs text-slate-500 font-code-mono mt-0.5">
-                Target Active Salt: {currentDispute.activeComposition}
-              </p>
+              {onOpenAiTriage && (
+                <button
+                  onClick={() => onOpenAiTriage(currentDispute)}
+                  className="px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold text-xs border border-blue-200 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-sm">psychology</span>
+                  <span>AI Triage Advice</span>
+                </button>
+              )}
             </div>
 
-            <div className="text-right">
-              <span className="text-[11px] font-code-mono text-slate-400 block">Reported</span>
-              <span className="text-xs font-semibold text-slate-700">{currentDispute.reportedTime}</span>
-            </div>
-          </div>
-
-          {/* Description & Clinical Analysis */}
-          <div className="my-4 flex flex-col gap-3">
-            <div className="p-3 rounded-lg bg-amber-50/70 border border-amber-200 text-xs text-amber-900 leading-relaxed">
-              <strong>Clinical Discrepancy Statement:</strong>
-              <p className="mt-1">{currentDispute.discrepancyDescription}</p>
+            <div className="grid grid-cols-2 gap-4 text-xs mb-4">
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Affected Innovator</span>
+                <span className="font-bold text-slate-800 text-sm">{currentDispute.medicineAffected}</span>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-50 border border-slate-100">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Active Formulation Salt</span>
+                <span className="font-bold text-slate-800 text-sm">{currentDispute.activeComposition}</span>
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-1">
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-                <span className="text-slate-500 font-bold uppercase text-[10px] block mb-1">
-                  CDSCO Regulatory Standard
-                </span>
-                <div className="font-medium text-slate-800">
-                  Dissolution Profile f2 Criteria &ge; 50
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Innovator Reference standard bio-equivalent match requirement.
-                </div>
-              </div>
-
-              <div className="p-3 rounded-lg bg-slate-50 border border-slate-200 text-xs">
-                <span className="text-slate-500 font-bold uppercase text-[10px] block mb-1">
-                  Observed Feed Deviation
-                </span>
-                <div className="font-medium text-red-700 font-bold">
-                  Observed f2 = 41.2 (Sub-therapeutic divergence)
-                </div>
-                <div className="text-[11px] text-slate-500 mt-1">
-                  Pharmacists reported delayed onset when swapped under chronic regimen.
-                </div>
-              </div>
+            <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-700 mb-4">
+              <span className="font-bold text-slate-900 block mb-1">Clinical Discrepancy Note:</span>
+              <p className="leading-relaxed">{currentDispute.discrepancyDescription}</p>
             </div>
           </div>
 
@@ -167,7 +155,7 @@ export const DisputesTriageView: React.FC<DisputesTriageViewProps> = ({
             <textarea
               value={overrideNote}
               onChange={(e) => setOverrideNote(e.target.value)}
-              placeholder="Provide pharmacological reasoning (e.g., 'Quarantining Jan Aushadhi generic batch #JA-804 until re-assayed by CDSCO lab')..."
+              placeholder="Provide pharmacological reasoning (e.g., 'Quarantining generic batch until re-assayed by CDSCO lab')..."
               className="w-full h-20 p-2.5 rounded border border-slate-300 text-xs text-slate-800 focus:outline-none focus:border-[#2563EB] mb-3"
             />
 
@@ -203,6 +191,6 @@ export const DisputesTriageView: React.FC<DisputesTriageViewProps> = ({
           </div>
         </div>
       </div>
-    </div>
   );
 };
+

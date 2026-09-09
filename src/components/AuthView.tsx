@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserAccount, UserRole, TenantInfo } from '../types';
 import { DEFAULT_USERS, INITIAL_TENANTS } from '../data/mockData';
+import { api } from '../services/api';
 
 interface AuthViewProps {
   onLoginSuccess: (user: UserAccount) => void;
@@ -23,6 +24,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [email, setEmail] = useState('sarah.jenkins@apollohealth.org');
   const [password, setPassword] = useState('Password123!');
   const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Register state
   const [regName, setRegName] = useState('');
@@ -30,7 +32,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   const [regPassword, setRegPassword] = useState('');
   const [regRole, setRegRole] = useState<UserRole>('Clinical Pharmacist');
 
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -40,29 +42,36 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    const matched = registeredUsers.find(
-      (u) => u.email.toLowerCase() === emailTrimmed
-    );
-
-    if (matched) {
-      onLoginSuccess(matched);
-    } else {
-      // Allow instant demo sign in with any email
-      const customUser: UserAccount = {
-        id: `usr-${Date.now()}`,
-        name: emailTrimmed.split('@')[0].replace('.', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
-        email: emailTrimmed,
-        role: 'Clinical Pharmacist',
-        title: 'Healthcare Professional',
-        tenantId: availableTenants[0]?.tenantCode || 'TN-4092',
-        tenantName: availableTenants[0]?.name || 'Apollo Health Network',
-        joinedAt: 'Today'
-      };
-      onLoginSuccess(customUser);
+    setIsLoading(true);
+    try {
+      const { user } = await api.login(emailTrimmed, password);
+      onLoginSuccess(user);
+    } catch (err: any) {
+      // Offline fallback
+      const matched = registeredUsers.find(
+        (u) => u.email.toLowerCase() === emailTrimmed
+      );
+      if (matched) {
+        onLoginSuccess(matched);
+      } else {
+        const customUser: UserAccount = {
+          id: `usr-${Date.now()}`,
+          name: emailTrimmed.split('@')[0].replace('.', ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+          email: emailTrimmed,
+          role: 'Clinical Pharmacist',
+          title: 'Healthcare Professional',
+          tenantId: availableTenants[0]?.tenantCode || 'TN-4092',
+          tenantName: availableTenants[0]?.name || 'Apollo Health Network',
+          joinedAt: 'Today'
+        };
+        onLoginSuccess(customUser);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -79,29 +88,43 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    const newUser: UserAccount = {
-      id: `usr-${Date.now()}`,
-      name: regName.trim(),
-      email: regEmail.trim().toLowerCase(),
-      role: regRole,
-      title: regRole === 'Patient / Consumer' ? 'Patient' : 'Clinical Practitioner',
-      tenantId: availableTenants[0]?.tenantCode || 'TN-4092',
-      tenantName: availableTenants[0]?.name || 'Apollo Health Network',
-      joinedAt: 'Just now',
-      password: regPassword
-    };
+    setIsLoading(true);
+    try {
+      const tenant = availableTenants[0];
+      const { user } = await api.register({
+        name: regName.trim(),
+        email: regEmail.trim().toLowerCase(),
+        password: regPassword,
+        role: regRole,
+        title: regRole === 'Patient / Consumer' ? 'Patient' : 'Clinical Practitioner',
+        tenantId: tenant?.tenantCode || 'TN-4092',
+        tenantName: tenant?.name || 'Apollo Health Network'
+      });
 
-    if (onRegisterUser) {
-      onRegisterUser(newUser);
+      if (onRegisterUser) {
+        onRegisterUser(user);
+      }
+      onLoginSuccess(user);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed');
+    } finally {
+      setIsLoading(false);
     }
-    onLoginSuccess(newUser);
   };
 
-  const handleDemoSelect = (user: UserAccount) => {
+  const handleDemoSelect = async (user: UserAccount) => {
     setEmail(user.email);
     setPassword('Password123!');
     setError(null);
-    onLoginSuccess(user);
+    setIsLoading(true);
+    try {
+      const { user: authedUser } = await api.login(user.email, 'Password123!');
+      onLoginSuccess(authedUser);
+    } catch {
+      onLoginSuccess(user);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (

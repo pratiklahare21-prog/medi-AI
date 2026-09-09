@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   AppViewMode, 
   OpsNavigationTab, 
@@ -7,9 +7,9 @@ import {
   PricingPartnerFeed, 
   AccuracyDisputeItem, 
   AuditLogItem, 
-  LinkedGenericCompound,
-  PriceAlert,
-  UserAccount
+  LinkedGenericCompound, 
+  PriceAlert, 
+  UserAccount 
 } from './types';
 import { 
   INITIAL_TENANTS, 
@@ -21,6 +21,7 @@ import {
   INITIAL_PRICE_ALERTS,
   DEFAULT_USERS
 } from './data/mockData';
+import { api } from './services/api';
 
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
@@ -84,21 +85,65 @@ export default function App() {
   const [alertModalMed, setAlertModalMed] = useState<MedicineCatalogEntry | null>(null);
   const [priceAlertsDrawerOpen, setPriceAlertsDrawerOpen] = useState(false);
 
-  // Helper to append cryptographic audit log
-  const logAction = (action: string, details: string) => {
-    const newLog: AuditLogItem = {
-      id: `audit-${Date.now()}`,
-      action,
-      actor: currentUser?.name || 'Dr. Sarah Jenkins',
-      role: currentUser?.role || 'Lead Ops Admin',
-      targetEntity: details,
-      tenantId: currentTenant.tenantCode,
-      tenantName: currentTenant.name,
-      timestamp: 'Just now',
-      hashSignature: `HMAC-SHA256: ${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
-      status: 'Audited'
+  // Hydrate data from backend API on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      try {
+        const [backendCatalog, backendFeeds, backendDisputes, backendLogs, backendAlerts] = await Promise.all([
+          api.getCatalog(),
+          api.getFeeds(),
+          api.getDisputes(),
+          api.getAuditLogs(),
+          api.getPriceAlerts()
+        ]);
+
+        if (isMounted) {
+          if (backendCatalog && backendCatalog.length > 0) setCatalog(backendCatalog);
+          if (backendFeeds && backendFeeds.length > 0) setFeeds(backendFeeds);
+          if (backendDisputes && backendDisputes.length > 0) setDisputes(backendDisputes);
+          if (backendLogs && backendLogs.length > 0) setAuditLogs(backendLogs);
+          if (backendAlerts && backendAlerts.length > 0) setPriceAlerts(backendAlerts);
+        }
+      } catch (e) {
+        console.warn('Initial API sync failed, continuing with initial datasets', e);
+      }
+    }
+
+    loadData();
+
+    return () => {
+      isMounted = false;
     };
-    setAuditLogs(prev => [newLog, ...prev]);
+  }, []);
+
+  // Helper to append cryptographic audit log
+  const logAction = async (action: string, details: string) => {
+    try {
+      const newLog = await api.createAuditLog({
+        action,
+        targetEntity: details,
+        actor: currentUser?.name || 'Dr. Sarah Jenkins',
+        role: currentUser?.role || 'Lead Ops Admin',
+        status: 'Audited'
+      });
+      setAuditLogs(prev => [newLog, ...prev]);
+    } catch {
+      const fallbackLog: AuditLogItem = {
+        id: `audit-${Date.now()}`,
+        action,
+        actor: currentUser?.name || 'Dr. Sarah Jenkins',
+        role: currentUser?.role || 'Lead Ops Admin',
+        targetEntity: details,
+        tenantId: currentTenant.tenantCode,
+        tenantName: currentTenant.name,
+        timestamp: 'Just now',
+        hashSignature: `HMAC-SHA256: ${Math.random().toString(16).substring(2, 10)}${Math.random().toString(16).substring(2, 10)}`,
+        status: 'Audited'
+      };
+      setAuditLogs(prev => [fallbackLog, ...prev]);
+    }
   };
 
   // Auth Handlers
@@ -113,6 +158,7 @@ export default function App() {
     const matchingTenant = INITIAL_TENANTS.find(t => t.tenantCode === user.tenantId);
     if (matchingTenant) {
       setCurrentTenant(matchingTenant);
+      api.setTenantId(matchingTenant.tenantCode);
     }
 
     // Role-based view selection
@@ -136,10 +182,11 @@ export default function App() {
     logAction('NEW_USER_REGISTERED', `Practitioner registration completed for ${newUser.name} (Council No: ${newUser.licenseNumber || 'N/A'})`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (currentUser) {
       logAction('USER_LOGOUT', `User ${currentUser.name} signed out of clinical session.`);
     }
+    await api.logout();
     setCurrentUser(null);
     try {
       localStorage.setItem('sastarx_current_user', 'null');
@@ -164,24 +211,36 @@ export default function App() {
   };
 
   // Price Alert handlers
-  const handleSaveAlert = (alertData: Omit<PriceAlert, 'id' | 'createdAt'> & { id?: string }) => {
+  const handleSaveAlert = async (alertData: Omit<PriceAlert, 'id' | 'createdAt'> & { id?: string }) => {
     if (alertData.id) {
       // Update existing
       setPriceAlerts(prev =>
         prev.map(a => (a.id === alertData.id ? { ...a, ...alertData } : a))
       );
+      try {
+        await api.updatePriceAlert(alertData.id, alertData);
+      } catch (e) {
+        console.warn('Failed to update price alert via API', e);
+      }
       logAction(
         'UPDATE_PRICE_ALERT',
         `Updated price drop alert threshold for ${alertData.medicineName} to ₹${alertData.targetThresholdPrice}`
       );
     } else {
       // Create new
+      const tempId = `alert-${Date.now()}`;
       const newAlert: PriceAlert = {
         ...alertData,
-        id: `alert-${Date.now()}`,
+        id: tempId,
         createdAt: 'Just now'
       };
       setPriceAlerts(prev => [newAlert, ...prev]);
+      try {
+        const created = await api.createPriceAlert(alertData);
+        setPriceAlerts(prev => prev.map(a => a.id === tempId ? created : a));
+      } catch (e) {
+        console.warn('Failed to persist price alert via API', e);
+      }
       logAction(
         'CREATE_PRICE_ALERT',
         `Configured new price drop alert for ${alertData.medicineName} (Threshold: ₹${alertData.targetThresholdPrice})`
@@ -189,29 +248,40 @@ export default function App() {
     }
   };
 
-  const handleDeleteAlert = (alertId: string) => {
+  const handleDeleteAlert = async (alertId: string) => {
     const toDelete = priceAlerts.find(a => a.id === alertId);
     setPriceAlerts(prev => prev.filter(a => a.id !== alertId));
+    try {
+      await api.deletePriceAlert(alertId);
+    } catch (e) {
+      console.warn('Failed to delete price alert via API', e);
+    }
     if (toDelete) {
       logAction('DELETE_PRICE_ALERT', `Removed price alert for ${toDelete.medicineName}`);
     }
   };
 
-  const handleTogglePauseAlert = (alertId: string) => {
+  const handleTogglePauseAlert = async (alertId: string) => {
+    let nextStatus: 'Active' | 'Paused' = 'Active';
     setPriceAlerts(prev =>
       prev.map(a => {
         if (a.id !== alertId) return a;
-        const newStatus = a.status === 'Paused' ? 'Active' : 'Paused';
+        nextStatus = a.status === 'Paused' ? 'Active' : 'Paused';
         logAction(
-          newStatus === 'Paused' ? 'PAUSE_PRICE_ALERT' : 'RESUME_PRICE_ALERT',
-          `Changed alert status to ${newStatus} for ${a.medicineName}`
+          nextStatus === 'Paused' ? 'PAUSE_PRICE_ALERT' : 'RESUME_PRICE_ALERT',
+          `Changed alert status to ${nextStatus} for ${a.medicineName}`
         );
-        return { ...a, status: newStatus };
+        return { ...a, status: nextStatus };
       })
     );
+    try {
+      await api.updatePriceAlert(alertId, { status: nextStatus });
+    } catch (e) {
+      console.warn('Failed to update pause/resume status via API', e);
+    }
   };
 
-  const handleSimulatePriceDrop = (alertId: string, simulatedPrice: number) => {
+  const handleSimulatePriceDrop = async (alertId: string, simulatedPrice: number) => {
     setPriceAlerts(prev =>
       prev.map(a => {
         if (a.id !== alertId) return a;
@@ -245,10 +315,16 @@ export default function App() {
         })
       );
     }
+
+    try {
+      await api.simulatePriceDrop(alertId, simulatedPrice);
+    } catch (e) {
+      console.warn('Failed to persist simulated price drop to API', e);
+    }
   };
 
   // Handlers
-  const handleToggleGenericInRx = (medId: string, genericId: string) => {
+  const handleToggleGenericInRx = async (medId: string, genericId: string) => {
     setCatalog(prev =>
       prev.map(med => {
         if (med.id !== medId || !med.genericsList) return med;
@@ -264,19 +340,28 @@ export default function App() {
         return { ...med, genericsList: updatedGenerics };
       })
     );
+    try {
+      await api.toggleGenericInRx(medId, genericId);
+    } catch (e) {
+      console.warn('Failed to persist formulary toggle to API', e);
+    }
   };
 
-  const handleAddMedicine = (newMed: MedicineCatalogEntry) => {
+  const handleAddMedicine = async (newMed: MedicineCatalogEntry) => {
     setCatalog(prev => [newMed, ...prev]);
     logAction('REGISTER_MEDICINE_ENTRY', `Added new compound ${newMed.brandName} (${newMed.activeSalt})`);
+    try {
+      await api.addMedicine(newMed);
+    } catch (e) {
+      console.warn('Failed to persist new medicine to API', e);
+    }
   };
 
-  const handleLinkGeneric = (medId: string, newGeneric: LinkedGenericCompound) => {
+  const handleLinkGeneric = async (medId: string, newGeneric: LinkedGenericCompound) => {
     setCatalog(prev =>
       prev.map(med => {
         if (med.id !== medId) return med;
         const existing = med.genericsList || [];
-        logAction('LINK_GENERIC_COMPOUND', `Linked generic ${newGeneric.name} to ${med.brandName}`);
         return {
           ...med,
           verifiedGenericsCount: med.verifiedGenericsCount + 1,
@@ -284,9 +369,16 @@ export default function App() {
         };
       })
     );
+    const targetMed = catalog.find(m => m.id === medId);
+    logAction('LINK_GENERIC_COMPOUND', `Linked generic ${newGeneric.name} to ${targetMed?.brandName || medId}`);
+    try {
+      await api.linkGeneric(medId, newGeneric);
+    } catch (e) {
+      console.warn('Failed to persist linked generic to API', e);
+    }
   };
 
-  const handleRetryFeed = (feedId: string) => {
+  const handleRetryFeed = async (feedId: string) => {
     setFeeds(prev =>
       prev.map(f => {
         if (f.id !== feedId) return f;
@@ -300,25 +392,39 @@ export default function App() {
       })
     );
 
-    setTimeout(() => {
-      setFeeds(prev =>
-        prev.map(f => {
-          if (f.id !== feedId) return f;
-          return {
-            ...f,
-            status: 'Healthy',
-            syncProgress: undefined,
-            updatedAgo: 'Just now',
-            notes: 'Successfully recovered after forced retry. 2,420 SKUs parsed.'
-          };
-        })
-      );
-    }, 2000);
+    try {
+      const updatedFeed = await api.retryFeed(feedId);
+      setTimeout(() => {
+        setFeeds(prev =>
+          prev.map(f => (f.id === feedId ? { ...f, ...updatedFeed, status: 'Healthy', syncProgress: undefined, updatedAgo: 'Just now' } : f))
+        );
+      }, 1500);
+    } catch {
+      setTimeout(() => {
+        setFeeds(prev =>
+          prev.map(f => {
+            if (f.id !== feedId) return f;
+            return {
+              ...f,
+              status: 'Healthy',
+              syncProgress: undefined,
+              updatedAgo: 'Just now',
+              notes: 'Successfully recovered after forced retry. 2,420 SKUs parsed.'
+            };
+          })
+        );
+      }, 2000);
+    }
   };
 
-  const handleResolveDispute = (id: string, action: string) => {
+  const handleResolveDispute = async (id: string, action: string) => {
     setDisputes(prev => prev.filter(d => d.id !== id));
     logAction('RESOLVE_ACCURACY_DISPUTE', `Resolved dispute #${id} with decision: ${action}`);
+    try {
+      await api.resolveDispute(id, action);
+    } catch (e) {
+      console.warn('Failed to persist resolved dispute to API', e);
+    }
   };
 
   const handleAddToCart = (item: { name: string; price: number; originalPrice: number; savings: number }) => {

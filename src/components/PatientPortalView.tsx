@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { MedicineCatalogEntry, ChronicPack, OCRDetectedMedicine, PriceAlert } from '../types';
+import { api, AiRecommendationResponse, AiSearchResult } from '../services/api';
 
 interface PatientPortalViewProps {
   catalog: MedicineCatalogEntry[];
@@ -27,6 +28,24 @@ export const PatientPortalView: React.FC<PatientPortalViewProps> = ({
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrResults, setOcrResults] = useState<OCRDetectedMedicine[] | null>(null);
   const [ocrSuccessMsg, setOcrSuccessMsg] = useState<string | null>(null);
+  const [activePreset, setActivePreset] = useState<string>('cardio');
+
+  // OCR Inline Editing State
+  const [editingOcrId, setEditingOcrId] = useState<string | null>(null);
+  const [editPrescribedName, setEditPrescribedName] = useState('');
+  const [editDosage, setEditDosage] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // AI Regimen Recommender State
+  const [recCondition, setRecCondition] = useState('Type 2 Diabetes');
+  const [recCurrentMeds, setRecCurrentMeds] = useState<string[]>(['Metformin 500mg']);
+  const [recSensitivity, setRecSensitivity] = useState<'maximum-savings' | 'balanced' | 'primary-brand'>('maximum-savings');
+  const [recLoading, setRecLoading] = useState(false);
+  const [recResult, setRecResult] = useState<AiRecommendationResponse | null>(null);
+
+  // AI Search State
+  const [isAiSearching, setIsAiSearching] = useState(false);
+  const [aiSearchResult, setAiSearchResult] = useState<AiSearchResult | null>(null);
 
   // Filter for search suggestions
   const searchResults = searchQuery.trim()
@@ -40,59 +59,112 @@ export const PatientPortalView: React.FC<PatientPortalViewProps> = ({
   const handleSelectMed = (med: MedicineCatalogEntry) => {
     setSelectedMedicine(med);
     setSearchQuery('');
+    setAiSearchResult(null);
   };
 
-  const handleRunSampleOcr = () => {
+  const handleRunOcrPreset = async (presetId: string) => {
+    setActivePreset(presetId);
+    setOcrScanning(true);
+    setOcrResults(null);
+    setOcrSuccessMsg(null);
+    try {
+      const results = await api.ocrPrescription({ presetId });
+      setOcrResults(results);
+      const totalSavings = results.reduce((acc, m) => acc + m.savings, 0);
+      setOcrSuccessMsg(`Prescription verified by SastaRx Vision AI with ${results.length} bioequivalent alternatives. Projected savings: ₹${totalSavings.toFixed(2)}.`);
+    } catch (err) {
+      console.warn('OCR preset error', err);
+    } finally {
+      setOcrScanning(false);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
     setOcrScanning(true);
     setOcrResults(null);
     setOcrSuccessMsg(null);
 
-    setTimeout(() => {
-      setOcrScanning(false);
-      setOcrResults([
-        {
-          prescribedBrand: 'Januvia 100mg',
-          activeSalt: 'Sitagliptin 100mg',
-          brandedPrice: 435.0,
-          genericEquivalent: 'Zita 100 (Glenmark)',
-          genericPrice: 120.0,
-          savingsPercent: 72.4,
-          confidenceScore: 0.98
-        },
-        {
-          prescribedBrand: 'Telma 40',
-          activeSalt: 'Telmisartan 40mg',
-          brandedPrice: 195.0,
-          genericEquivalent: 'Telmikem 40 (Alkem)',
-          genericPrice: 42.0,
-          savingsPercent: 78.5,
-          confidenceScore: 0.97
-        },
-        {
-          prescribedBrand: 'Ecosprin 75',
-          activeSalt: 'Aspirin (Enteric Coated) 75mg',
-          brandedPrice: 80.0,
-          genericEquivalent: 'ASA-75 Generic (Cipla)',
-          genericPrice: 13.0,
-          savingsPercent: 83.7,
-          confidenceScore: 0.96
-        }
-      ]);
-      setOcrSuccessMsg('Prescription verified by SastaRx Vision AI with 98.2% confidence. 3 bioequivalent alternatives found.');
-    }, 1200);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = reader.result as string;
+      try {
+        const results = await api.ocrPrescription({
+          imageBase64: base64,
+          mimeType: file.type || 'image/jpeg'
+        });
+        setOcrResults(results);
+        const totalSavings = results.reduce((acc, m) => acc + m.savings, 0);
+        setOcrSuccessMsg(`Prescription '${file.name}' analyzed by Gemini Vision AI. Identified ${results.length} medications saving ₹${totalSavings.toFixed(2)}.`);
+      } catch (err) {
+        console.warn('File OCR error', err);
+      } finally {
+        setOcrScanning(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleStartEdit = (item: OCRDetectedMedicine) => {
+    setEditingOcrId(item.id);
+    setEditPrescribedName(item.extractedName);
+    setEditDosage(item.dosageInstructions);
+  };
+
+  const handleSaveEdit = (id: string) => {
+    if (!ocrResults) return;
+    setOcrResults(prev =>
+      prev ? prev.map(m => (m.id === id ? { ...m, extractedName: editPrescribedName, dosageInstructions: editDosage } : m)) : null
+    );
+    setEditingOcrId(null);
   };
 
   const handleAddAllOcr = () => {
     if (!ocrResults) return;
     ocrResults.forEach((item) => {
       onAddToCart({
-        name: item.genericEquivalent,
+        name: item.suggestedGeneric,
         price: item.genericPrice,
-        originalPrice: item.brandedPrice,
-        savings: item.brandedPrice - item.genericPrice
+        originalPrice: item.originalPrice,
+        savings: item.savings
       });
     });
-    setOcrSuccessMsg('Added all 3 generic bioequivalents to cart! You are saving ₹535.00 on this prescription.');
+    const totalSavings = ocrResults.reduce((acc, m) => acc + m.savings, 0);
+    setOcrSuccessMsg(`Added all ${ocrResults.length} generic bioequivalents to cart! You are saving ₹${totalSavings.toFixed(2)} on this prescription.`);
+  };
+
+  const handleGenerateRegimen = async () => {
+    setRecLoading(true);
+    try {
+      const result = await api.getAiRecommendations({
+        condition: recCondition,
+        currentMedications: recCurrentMeds,
+        priceSensitivity: recSensitivity
+      });
+      setRecResult(result);
+    } catch (err) {
+      console.warn('AI recommend error', err);
+    } finally {
+      setRecLoading(false);
+    }
+  };
+
+  const handleAiSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsAiSearching(true);
+    try {
+      const result = await api.aiSearch(searchQuery);
+      setAiSearchResult(result);
+      if (result.data.length > 0) {
+        setSelectedMedicine(result.data[0]);
+      }
+    } catch (err) {
+      console.warn('AI search error', err);
+    } finally {
+      setIsAiSearching(false);
+    }
   };
 
   return (
