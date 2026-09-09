@@ -40,6 +40,7 @@ import { LinkGenericModal } from './components/LinkGenericModal';
 import { AuditLogModal } from './components/AuditLogModal';
 import { SetPriceAlertModal } from './components/SetPriceAlertModal';
 import { PriceAlertsDrawer } from './components/PriceAlertsDrawer';
+import { AiDisputeModal } from './components/AiDisputeModal';
 
 export default function App() {
   const [viewMode, setViewMode] = useState<AppViewMode>('clinical-ops');
@@ -84,6 +85,7 @@ export default function App() {
   const [auditLogsModalOpen, setAuditLogsModalOpen] = useState(false);
   const [alertModalMed, setAlertModalMed] = useState<MedicineCatalogEntry | null>(null);
   const [priceAlertsDrawerOpen, setPriceAlertsDrawerOpen] = useState(false);
+  const [aiTriageDispute, setAiTriageDispute] = useState<AccuracyDisputeItem | null>(null);
 
   // Hydrate data from backend API on mount
   useEffect(() => {
@@ -557,6 +559,7 @@ export default function App() {
                 <DisputesTriageView
                   disputes={disputes}
                   onResolveDispute={handleResolveDispute}
+                  onOpenAiTriage={(dispute) => setAiTriageDispute(dispute)}
                 />
               )}
 
@@ -641,6 +644,17 @@ export default function App() {
         onSimulateDrop={handleSimulatePriceDrop}
       />
 
+      {/* AI Dispute Triage Modal */}
+      <AiDisputeModal
+        isOpen={!!aiTriageDispute}
+        dispute={aiTriageDispute}
+        onClose={() => setAiTriageDispute(null)}
+        onApplyDecision={(disputeId, decision) => {
+          handleResolveDispute(disputeId, decision);
+          setAiTriageDispute(null);
+        }}
+      />
+
       {/* Global Compact Status Footer */}
       <footer className="fixed bottom-0 left-0 right-0 h-8 bg-slate-900 border-t border-slate-800 text-slate-400 flex items-center justify-between px-4 z-40 text-[11px] font-code-mono">
         <div className="flex items-center gap-3">
@@ -659,7 +673,7 @@ export default function App() {
             DISHA / HIPAA RLS: <strong className="text-emerald-400">Enforced</strong>
           </span>
           <span className="hidden sm:inline text-slate-500">
-            v2.4.0-prod
+            v3.0.0-prod
           </span>
         </div>
       </footer>
