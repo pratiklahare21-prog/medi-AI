@@ -1,0 +1,185 @@
+// Prisma Schema for medi AI / SastaRx — PostgreSQL (Supabase)
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id          String   @id @default(uuid())
+  name        String
+  shortCode   String   @unique
+  tenantCode  String   @unique
+  schema      String
+  region      String
+  environment String   @default("Production")
+  status      String   @default("Active RLS")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  medicines   Medicine[]
+  disputes    Dispute[]
+  auditLogs   AuditLog[]
+  feeds       PricingFeed[]
+
+  @@map("tenants")
+}
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  passwordHash  String
+  name          String
+  role          String   @default("Clinical Pharmacist")
+  title         String   @default("Healthcare Practitioner")
+  licenseNumber String?
+  department    String?
+  phone         String?
+  joinedAt      DateTime @default(now())
+
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  priceAlerts   PriceAlert[]
+
+  @@map("users")
+}
+
+model Medicine {
+  id                       String   @id @default(uuid())
+  brandName                String
+  manufacturer             String
+  formulationType          String
+  dosageForm               String
+  activeSalt               String
+  saltStrength             String
+  compositionDetails       String
+  atcCode                  String
+  innCode                  String?
+  therapeuticCategory      String
+  verifiedGenericsCount    Int      @default(0)
+  brandedMrp               Float
+  lowestGenericPrice       Float
+  lowestGenericBrand       String
+  savingsPercent           Float
+  savingsAmount            Float
+  savingsIntervalText      String
+  regulatoryStatus         String
+  bioequivalenceConfidence Float
+  verifierName             String
+  pharmacopeiaStandard     String?
+  dissolutionNote          String?
+  createdAt                DateTime @default(now())
+
+  tenantId                 String?
+  tenant                   Tenant?  @relation(fields: [tenantId], references: [id])
+  generics                 GenericBioequivalent[]
+  priceAlerts              PriceAlert[]
+
+  @@map("medicines")
+}
+
+model GenericBioequivalent {
+  id                    String   @id @default(uuid())
+  name                  String
+  manufacturer          String
+  compositionMatch      String
+  genericStripMrp       Float
+  patientSavingsPercent Float
+  patientSavingsAmount  Float
+  verifiedMatch         Boolean  @default(true)
+  includedInPatientRx   Boolean  @default(false)
+  formularyStatus       String   @default("Standard")
+  similarityFactorF2    Float?
+
+  medicineId            String
+  medicine              Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+
+  @@map("generic_bioequivalents")
+}
+
+model PricingFeed {
+  id               String   @id @default(uuid())
+  name             String
+  type             String   // e.g. "Realtime SKU API", "Catalog Pipeline"
+  status           String   @default("Healthy")
+  skusParsed       Int      @default(0)
+  updatedAgo       String   @default("Just now")
+  avgResponseMs    Int      @default(120)
+  errorRatePercent Float    @default(0.0)
+  syncProgress     Int?
+  slaBreachedHours Int?
+  notes            String?
+  endpointUrl      String?
+
+  tenantId         String?
+  tenant           Tenant?  @relation(fields: [tenantId], references: [id])
+
+  @@map("pricing_feeds")
+}
+
+model PriceAlert {
+  id                   String    @id @default(uuid())
+  medicineName         String
+  activeSalt           String
+  brandedMrp           Float
+  currentLowestPrice   Float
+  targetThresholdPrice Float
+  channel              String    @default("In-App")
+  recipientTarget      String
+  status               String    @default("Active")
+  createdAt            DateTime  @default(now())
+  triggeredAt          DateTime?
+  triggeredPrice       Float?
+  triggeredBrand       String?
+  notes                String?
+
+  medicineId           String
+  medicine             Medicine  @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  userId               String?
+  user                 User?     @relation(fields: [userId], references: [id])
+
+  @@map("price_alerts")
+}
+
+model Dispute {
+  id                     String   @id @default(uuid())
+  title                  String
+  feedSource             String
+  feedCode               String
+  reportedTime           DateTime @default(now())
+  slaRemaining           String
+  severity               String   @default("Warning")
+  medicineAffected       String
+  activeComposition      String
+  discrepancyDescription String
+  clinicalReportsCount   Int      @default(1)
+  status                 String   @default("Open")
+
+  tenantId               String
+  tenant                 Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("disputes")
+}
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  timestamp         DateTime @default(now())
+  actor             String
+  role              String
+  action            String
+  targetEntity      String
+  hashSignature     String
+  cryptographicHash String?
+  details           String?
+  status            String   @default("Success")
+
+  tenantId          String
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@map("audit_logs")
+}

@@ -19,6 +19,114 @@ _Changes that are in development but not yet tagged._
 
 ---
 
+## [5.0.0] — 2026-09-09
+
+### Added
+
+**5.1 — Internationalization (i18n)**
+- `i18next` + `react-i18next` dependency for multi-language support
+- `src/i18n/index.ts` — i18n configuration with localStorage persistence
+- `src/i18n/locales/en.json` — English translations for app, header, tenant, sidebar, dashboard, catalog, patient_portal, common sections
+- `src/i18n/locales/hi.json` — Hindi (हिंदी) translations for all UI sections
+- `src/i18n/locales/mr.json` — Marathi (मराठी) translations for all UI sections
+- `src/components/LanguageSelector.tsx` — Language dropdown with flag icons, integrated into Header
+- Language preference persisted to `localStorage` key `medi-ai-language`
+
+**5.2 — Progressive Web App (PWA)**
+- `vite-plugin-pwa` dependency and configuration in `vite.config.ts`
+- Web app manifest with theme color `#0F172A`, background `#F8FAFC`, standalone display mode
+- PWA icons: `pwa-192x192.png`, `pwa-512x512.png` (placeholder assets)
+- Service worker with Workbox runtime caching:
+  - **CacheFirst** for Google Fonts (1 year TTL)
+  - **NetworkFirst** for `/api/catalog/*` (1 day TTL, offline catalog access)
+  - **StaleWhileRevalidate** for `/api/price-trends/*` (6 hour TTL)
+- PWA meta tags in `index.html`: `theme-color`, `apple-mobile-web-app-capable`, `apple-touch-icon`
+- Auto-update registration, installable on mobile/desktop
+
+**5.3 — Advanced Features**
+- `src/components/MedicineComparisonView.tsx` — Side-by-side branded vs generic comparison tool:
+  - Dual-column layout (branded blue, generic green)
+  - Detailed bioequivalence data: f₂ similarity factor, composition match, verified status
+  - Pricing breakdown: MRP vs generic price, savings calculator
+  - Formulary status badges (Tier 1 Primary, Preferred, Standard, Restricted)
+  - Patient savings summary card with monthly projections
+  - Export PDF Report and Share buttons (placeholder)
+- `src/components/SavingsDashboardView.tsx` — Comprehensive savings analytics:
+  - 4 KPI cards: Cumulative Savings (₹55,200 6-month demo), Avg Savings/Medicine, Medicines Covered, Patient Adoption (87.4%)
+  - **Recharts visualizations**: Monthly trend line chart (branded vs generic vs savings), category pie chart
+  - Top 10 highest-saving generics table with branded MRP, lowest generic, savings %, category
+  - Time range selector (Last 6 Months, Last 12 Months, YTD, All Time)
+
+**5.4 — Partner & Admin Portals**
+- `src/components/SuperAdminView.tsx` — Multi-tenant super admin control panel:
+  - **Tenants Tab**: Full tenant management table (name, code, schema, region, environment, status), Add New Tenant modal (placeholder)
+  - **Users Tab**: User administration table (name, email, role, tenant, joined date), role-based badges, CRUD actions (Edit, Reset Password, Deactivate)
+  - **System Config Tab**: API configuration (Gemini API key, rate limits), Database config (PostgreSQL connection, pool size), Security settings (2FA, HMAC verification, RLS), System health metrics (uptime 99.97%, response time 24ms, 148 active sessions)
+  - Purple gradient header with "All Systems Operational" badge
+  - Access control warning for non-admin roles
+
+**5.5 — Routing & Integration**
+- 3 new `OpsNavigationTab` values in `types.ts`: `medicine-comparison`, `savings-dashboard`, `super-admin-panel`
+- App.tsx routing: All 3 views lazy-loaded with `React.lazy`, wrapped in `ErrorBoundary` + `Suspense` with `ViewLoader`
+- Sidebar.tsx: New "Phase 5 Features" section with 3 nav items (Medicine Comparison, Savings Dashboard, Super Admin Panel with purple Admin badge)
+- Views accessible via Clinical Ops sidebar navigation
+
+### Changed
+- `package.json` version bumped to `5.0.0`
+- Header now includes LanguageSelector between notifications and profile dropdown
+- Main layout supports new Phase 5 views in clinical-ops mode
+
+---
+
+## [4.0.0] — 2026-09-09
+
+### Added
+
+**4.1 — Testing**
+- `vitest.config.ts` — Vitest configuration with jsdom environment, React plugin, 80%/80%/70% coverage thresholds, and coverage exclusions
+- `src/tests/setup.ts` — Global test setup: localStorage mock, fetch mock, console.warn suppression
+- `src/tests/unit/businessLogic.test.ts` — 22 unit tests covering: savings calculation, formulary status tiers, price alert lifecycle (Active → Triggered → Paused), audit log tamper-evident structure and HMAC format, bioequivalence f2 thresholds, multi-tenant data isolation
+- `src/tests/unit/security.test.ts` — 18 unit tests covering: input sanitization (HTML stripping, truncation), email validation, password policy, JWT format, HMAC-SHA256 pattern, rate limit config values, tenant ID injection protection
+- `src/tests/unit/mockData.test.ts` — 30+ integrity tests validating all 9 mock data exports against TypeScript interface contracts at runtime
+- `src/tests/unit/apiService.test.ts` — 12 tests covering token management, request header construction, fallback data shapes, and endpoint URL patterns
+- `npm run test`, `npm run test:coverage`, `npm run test:watch`, `npm run test:ui` scripts
+
+**4.2 — Security**
+- `src/server/middleware/rateLimiter.ts` — `authRateLimiter` (20 req/15min), `aiRateLimiter` (30 req/min), `generalRateLimiter` (300 req/min); all skipped in `NODE_ENV=test`
+- `src/server/middleware/sanitize.ts` — `sanitizeBody` middleware strips HTML tags, `javascript:` URIs, inline event handlers from all incoming JSON bodies; prototype pollution protection; `sanitizeInput` helper for individual field use
+- `helmet.js` — CSP, HSTS, X-Frame-Options, X-Content-Type-Options, X-DNS-Prefetch-Control applied globally
+- Rate limiters mounted: auth endpoints `authRateLimiter`, AI endpoints `aiRateLimiter`, all `/api/*` `generalRateLimiter`
+- Structured JSON error logger in global Express error handler; stack traces suppressed in production
+
+**4.3 — Performance**
+- `React.lazy` + `Suspense` code-splitting for all 7 main views: DashboardView, CatalogView, PricingFeedsView, DisputesTriageView, MultiTenantConfigView, PatientPortalView, ArchitectureView
+- Lazy loading for AddMedicineModal, LinkGenericModal, AiDisputeModal
+- `ViewLoader` skeleton component for consistent loading states
+
+**4.4 — Compliance**
+- `GET /api/audit-logs/verify` — HMAC-SHA256 integrity verifier; recomputes expected signatures for all logs, reports `verified`/`tampered` counts and `tamperedIds`; `integrityStatus: CLEAN | COMPROMISED`; cites DISHA §7 / HIPAA §164.312(b)
+- `src/components/LegalModal.tsx` — Privacy Policy and Terms of Service modal with DISHA/HIPAA/GDPR/CDSCO references, data retention policies, AI processing disclosure
+- `src/components/CookieConsentBanner.tsx` — GDPR Art.13 / DISHA §8 compliant consent banner; Essential Only vs Accept All; links to Privacy Policy and Terms via custom DOM events
+- `.env.example` — updated with all required keys, NODE_ENV, FIREBASE_PROJECT_ID documentation
+
+**4.5 — CI/CD**
+- `.github/workflows/ci.yml` — 5-job GitHub Actions pipeline: Lint+TypeCheck → Test+Coverage → Build → Deploy Staging (develop) → Deploy Production (main + release gate); concurrency cancel-in-progress; coverage artifact upload; `.env.example` key validation step
+- `Dockerfile` — multi-stage (node:22-alpine builder + runner); non-root `sastarx` user; port 8080 for Cloud Run; production deps only in runner stage
+
+**4.6 — Error Handling**
+- `src/components/ErrorBoundary.tsx` — React class component catching all render errors per subtree; recovery card with Try Again / Reload; structured JSON error log in `componentDidCatch`; dev-only stack trace display; compliance error ID footer
+- All 7 main views and 3 heavy modals wrapped with `<ErrorBoundary context="...">` in `App.tsx`
+- `CookieConsentBanner` and `LegalModal` mounted in `App.tsx`
+
+### Changed
+- `src/server/index.ts` — helmet + sanitizeBody + rate limiters wired; structured JSON error handler replaces console.error
+- `src/App.tsx` — all imports converted to `React.lazy`; Suspense wrappers added; ErrorBoundary wraps every view; legalModal state + window event listeners for privacy/terms; CookieConsentBanner and LegalModal added to render tree
+- `package.json` — name updated to `medi-ai-sastarx`; version `3.0.0`; added helmet, express-rate-limit, vitest, @vitest/coverage-v8, @testing-library/* and jsdom; test scripts added
+- `decisions.md` — DEC-013 added documenting all Phase 4 architectural decisions
+- `.env.example` — expanded with NODE_ENV and FIREBASE_PROJECT_ID
+
+---
+
 ## [3.0.0] — 2026-09-09
 
 ### Added

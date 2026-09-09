@@ -15,7 +15,7 @@
 - **For patients:** Discover verified generic alternatives to expensive branded medicines, compare prices, set price drop alerts, and access chronic care packs — all backed by bioequivalence data.
 
 **Deployment Target:** Google AI Studio → Cloud Run  
-**Current Version:** `v3.0.0-prod` (displayed in app footer)
+**Current Version:** `v5.0.0-prod` (displayed in app footer)
 
 ---
 
@@ -31,6 +31,8 @@
 |                  | Material Symbols Outlined (Google)   | CDN        |
 | **Animation**    | Motion (Framer Motion successor)     | ^12.23.24  |
 | **Charts**       | Recharts                             | ^3.10.1    |
+| **i18n**         | i18next + react-i18next              | ^26.4.2 / ^17.0.13 |
+| **PWA**          | vite-plugin-pwa + workbox-window     | ^0.20.5 / ^7.3.0 |
 | **AI / LLM**     | @google/genai (Gemini API)           | ^2.4.0     |
 | **Backend**      | Express                              | ^4.21.2    |
 | **Env Config**   | dotenv                               | ^17.2.3    |
@@ -75,6 +77,9 @@
 - [x] **Audit Log Modal** — Full audit trail viewer accessible from header
 - [x] **Price Trend Section** — Historical price trend charts with volatility analysis, market event annotations
 - [x] **Sidebar Navigation** — Collapsible sidebar with tab navigation, dispute/alert counts, user info
+- [x] **Medicine Comparison View** (Phase 5) — Side-by-side branded vs generic comparison with f₂ scores, bioequivalence verification, pricing breakdown, formulary status, patient savings calculator
+- [x] **Savings Dashboard** (Phase 5) — Cumulative savings analytics with KPIs, Recharts visualizations (monthly trend line chart, category pie chart), top 10 highest-saving generics table
+- [x] **Super Admin Panel** (Phase 5) — Multi-tenant management with 3 tabs (Tenants CRUD, User Administration, System Configuration), API/database/security settings, system health metrics
 
 ### Patient Portal Mode (`patient-portal`)
 
@@ -98,6 +103,14 @@
 - [x] **Session Persistence** — localStorage-based session with hydration on mount
 - [x] **Role-Based View Routing** — Patients auto-routed to Patient Portal; clinical roles to Ops
 - [x] **Logout** — Clear session, redirect to auth screen, audit log entry
+
+### Internationalization & Progressive Web App (Phase 5)
+
+- [x] **Multi-Language Support** — English, Hindi (हिंदी), Marathi (मराठी) translations across all UI sections
+- [x] **Language Selector** — Dropdown with flag icons in Header, preference persisted to localStorage
+- [x] **PWA Manifest** — Installable web app with theme color, icons, standalone mode
+- [x] **Service Worker** — Offline catalog caching (NetworkFirst), price trends (StaleWhileRevalidate), fonts (CacheFirst)
+- [x] **Offline-First** — Medicine catalog accessible without internet connection
 
 ### Cross-Cutting
 
@@ -356,12 +369,15 @@ All tenant-scoped tables include `tenant_id` for PostgreSQL RLS policies. Querie
 - Natural language search with intent parsing
 - AI Dispute Auto-Triage with evidence analysis
 
-### Phase 4 — Production Readiness
-- PostgreSQL live instance connection + RLS enforcement
-- Firebase Auth migration
-- Comprehensive test suite (unit + integration + E2E)
-- CI/CD pipeline (GitHub Actions → Cloud Run)
-- DISHA/HIPAA compliance audit
+### Phase 4 — Production Hardening (Complete ✅)
+- Vitest test suite (business logic, security, mock data integrity, API service)
+- Helmet.js CSP + rate limiting (auth 20/15min, AI 30/min) + input sanitization middleware
+- React.lazy + Suspense code-splitting for all 7 views and 3 modals
+- Audit log integrity verifier endpoint (GET /api/audit-logs/verify)
+- Privacy Policy, Terms of Service, Cookie Consent Banner (DISHA/HIPAA/GDPR)
+- GitHub Actions CI/CD pipeline (lint → test → build → staging/production Cloud Run)
+- Multi-stage Dockerfile for Cloud Run (non-root user, port 8080)
+- React ErrorBoundary wrapping all views
 
 ### Phase 5 — Scale & Expand
 - Multi-language support (Hindi, Marathi)
