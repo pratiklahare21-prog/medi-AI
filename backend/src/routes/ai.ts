@@ -1,8 +1,8 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { GoogleGenAI } from '@google/genai';
 import { db } from '../db';
-import { optionalAuth, AuthenticatedRequest } from '../middleware/auth';
-import { OCRDetectedMedicine, MedicineCatalogEntry } from '../types';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
+import { OCRDetectedMedicine } from '../types';
 import { SAMPLE_OCR_PRESCRIPTIONS } from '../data/mockData';
 
 export const aiRouter = Router();
@@ -22,7 +22,7 @@ if (apiKey && apiKey !== 'MY_GEMINI_API_KEY' && apiKey.trim() !== '') {
 // ==============================================================================
 // 1. POST /api/ai/ocr - Prescription OCR with Generic Bioequivalent Matching
 // ==============================================================================
-aiRouter.post('/ocr', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/ocr', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { imageBase64, mimeType = 'image/jpeg', presetId } = req.body;
     const catalog = await db.getCatalog(req.tenantId);
@@ -228,19 +228,21 @@ Respond ONLY with a valid JSON array of objects, with NO surrounding markdown or
       disclaimer: 'Extracted with optical character recognition. Always review and confirm against physical prescription before dispensing.'
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to process prescription image' });
+    const msg = err.message || 'Failed to process prescription image';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });
 
 // ==============================================================================
 // 2. POST /api/ai/recommend - Clinical Regimen & Generic Medicine Recommender
 // ==============================================================================
-aiRouter.post('/recommend', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/recommend', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { condition, currentMedications = [], priceSensitivity = 'maximum-savings', allergiesOrNotes } = req.body;
 
     if (!condition) {
-      res.status(400).json({ success: false, error: 'condition is required (e.g. Type 2 Diabetes, Hypertension)' });
+      const msg = 'condition is required (e.g. Type 2 Diabetes, Hypertension)';
+      res.status(400).json({ success: false, message: msg, error: msg });
       return;
     }
 
@@ -343,18 +345,20 @@ aiRouter.post('/recommend', optionalAuth, async (req: AuthenticatedRequest, res:
       regulatoryCompliance: 'CDSCO Rule 65 / WHO Bioequivalence Reference Standard Compliant'
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to generate recommendations' });
+    const msg = err.message || 'Failed to generate recommendations';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });
 
 // ==============================================================================
 // 3. POST /api/ai/search - Natural Language Semantic Medicine Search
 // ==============================================================================
-aiRouter.post('/search', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/search', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { query } = req.body;
     if (!query || typeof query !== 'string') {
-      res.status(400).json({ success: false, error: 'Query string is required' });
+      const msg = 'Query string is required';
+      res.status(400).json({ success: false, message: msg, error: msg });
       return;
     }
 
@@ -433,18 +437,20 @@ aiRouter.post('/search', optionalAuth, async (req: AuthenticatedRequest, res: Re
       data: matches
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to perform AI search' });
+    const msg = err.message || 'Failed to perform AI search';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });
 
 // ==============================================================================
 // 4. POST /api/ai/triage-dispute - Accuracy Dispute Auto-Triage with Evidence
 // ==============================================================================
-aiRouter.post('/triage-dispute', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+aiRouter.post('/triage-dispute', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { disputeId } = req.body;
     if (!disputeId) {
-      res.status(400).json({ success: false, error: 'disputeId is required' });
+      const msg = 'disputeId is required';
+      res.status(400).json({ success: false, message: msg, error: msg });
       return;
     }
 
@@ -452,7 +458,8 @@ aiRouter.post('/triage-dispute', optionalAuth, async (req: AuthenticatedRequest,
     const dispute = disputes.find(d => d.id === disputeId);
 
     if (!dispute) {
-      res.status(404).json({ success: false, error: `Dispute #${disputeId} not found` });
+      const msg = `Dispute #${disputeId} not found`;
+      res.status(404).json({ success: false, message: msg, error: msg });
       return;
     }
 
@@ -500,6 +507,7 @@ aiRouter.post('/triage-dispute', optionalAuth, async (req: AuthenticatedRequest,
       }
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to triage dispute' });
+    const msg = err.message || 'Failed to triage dispute';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });

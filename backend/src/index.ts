@@ -1,6 +1,28 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Critical startup checks (fail fast)
+// ─────────────────────────────────────────────────────────────────────────────
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+{
+  const PLACEHOLDER_SECRETS = new Set([
+    '',
+    'your_secret_here',
+    'change_me',
+    'medi-ai-sastarx-jwt-secure-key-2026',
+  ]);
+  const jwtSecret = process.env.JWT_SECRET;
+  if (!jwtSecret || PLACEHOLDER_SECRETS.has(jwtSecret.trim())) {
+    console.error(
+      '[FATAL] JWT_SECRET environment variable is missing or set to an insecure placeholder.\n' +
+        'Set a strong, unique secret in backend/.env before starting the server.\n' +
+        'Example:  JWT_SECRET=$(openssl rand -hex 32)'
+    );
+    process.exit(1);
+  }
+}
+
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -21,9 +43,18 @@ const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = '0.0.0.0';
 
-// Global middleware
+// ─────────────────────────────────────────────────────────────────────────────
+// CORS — restricted to FRONTEND_URL (credentials allowed)
+// ─────────────────────────────────────────────────────────────────────────────
+const ALLOWED_ORIGINS = FRONTEND_URL.split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({
-  origin: true, // Allow dev server and production clients
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+    const msg = `The CORS policy for this site does not allow access from Origin: ${origin}. ` +
+      `Allowed origins: ${ALLOWED_ORIGINS.join(', ')}. Configure FRONTEND_URL env var.`;
+    return callback(new Error(msg), false);
+  },
   credentials: true
 }));
 app.use(express.json());
@@ -91,6 +122,7 @@ app.use('/api/ai', aiRateLimiter, aiRouter);
 app.use('/api/*', (req: Request, res: Response) => {
   res.status(404).json({
     success: false,
+    message: 'Endpoint not found',
     error: `Endpoint '${req.originalUrl}' not found`
   });
 });
@@ -98,23 +130,37 @@ app.use('/api/*', (req: Request, res: Response) => {
 // Global error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   const status = err.status || err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  const rawMessage = err.message || 'Internal Server Error';
+  const safeMessage = status < 500 ? rawMessage : 'Internal Server Error';
 
   // Structured error log (production-safe — no stack traces to client)
   console.error(JSON.stringify({
     level: 'error',
     timestamp: new Date().toISOString(),
     status,
-    message,
+    message: rawMessage,
     path: _req?.originalUrl,
     method: _req?.method,
     ...(process.env.NODE_ENV !== 'production' && { stack: err.stack }),
   }));
 
-  res.status(status).json({
+  const body: {
+    success: false;
+    message: string;
+    error?: string;
+    errors?: Record<string, string>;
+  } = {
     success: false,
-    error: status < 500 ? message : 'Internal Server Error',
-  });
+    message: safeMessage,
+    error: safeMessage,
+  };
+
+  // Pass through per-field validation errors if middleware attached them
+  if (err && typeof err === 'object' && 'errors' in err && typeof err.errors === 'object') {
+    body.errors = err.errors as Record<string, string>;
+  }
+
+  res.status(status).json(body);
 });
 
 export const server = app.listen(PORT, HOST, () => {

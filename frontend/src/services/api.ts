@@ -22,8 +22,30 @@ import {
 } from '../data/mockData';
 import { MEDICINE_PRICE_HISTORIES, MEDICINE_VOLATILITY_SUMMARIES } from '../data/priceTrendsData';
 
-const BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ? import.meta.env.VITE_API_URL : '/api';
+const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+const BASE_URL = (env.VITE_API_URL || env.VITE_BACKEND_URL || 'http://localhost:3001') + '/api';
 const TOKEN_KEY = 'sastarx_auth_token';
+
+export type ApiErrorShape = {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  errors?: Record<string, string>;
+};
+
+class ApiError extends Error {
+  public status: number;
+  public errors?: Record<string, string>;
+  public raw: ApiErrorShape;
+
+  constructor(message: string, status: number, raw: ApiErrorShape) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.errors = raw.errors;
+    this.raw = raw;
+  }
+}
 
 class ApiClient {
   private currentTenantId: string = 'TN-4092';
@@ -65,20 +87,29 @@ class ApiClient {
     }
 
     const response = await fetch(`${BASE_URL}${endpoint}`, {
+      credentials: 'omit',
       ...options,
       headers
     });
 
-    if (!response.ok) {
-      let errorMessage = `HTTP Error ${response.status}`;
-      try {
-        const errorJson = await response.json();
-        if (errorJson.error) errorMessage = errorJson.error;
-      } catch {}
-      throw new Error(errorMessage);
+    let errorJson: ApiErrorShape | null = null;
+    try {
+      errorJson = await response.clone().json();
+    } catch {
+      errorJson = null;
     }
 
-    return response.json();
+    if (!response.ok) {
+      if (response.status === 401) {
+        try {
+          window.dispatchEvent(new CustomEvent('auth:logged-out', { detail: { endpoint } }));
+        } catch {}
+      }
+      let errorMessage = errorJson?.message || errorJson?.error || `HTTP Error ${response.status}`;
+      throw new ApiError(errorMessage, response.status, errorJson || {});
+    }
+
+    return (errorJson as unknown as T) || response.json();
   }
 
   // ==========================================
@@ -86,36 +117,21 @@ class ApiClient {
   // ==========================================
 
   public async login(email: string, password?: string): Promise<{ user: UserAccount; token: string }> {
-    try {
-      const res = await this.request<{ success: boolean; user: UserAccount; token: string }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
-      });
-      if (res.token) {
-        this.setAuthToken(res.token);
-      }
-      return { user: res.user, token: res.token };
-    } catch (err) {
-      // Fallback for offline demo mode
-      console.warn('API login failed, falling back to local user store', err);
-      const matched = DEFAULT_USERS.find(u => u.email.toLowerCase() === email.trim().toLowerCase()) || {
-        id: `usr-${Date.now()}`,
-        name: email.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        email,
-        role: 'Clinical Pharmacist' as const,
-        title: 'Healthcare Practitioner',
-        tenantId: 'TN-4092',
-        tenantName: 'Apollo Health Network',
-        joinedAt: 'Today'
-      };
-      return { user: matched, token: 'local-offline-session-token' };
+    const res = await this.request<{ success: boolean; user: UserAccount; token: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password })
+    });
+    if (res.token) {
+      this.setAuthToken(res.token);
     }
+    return { user: res.user, token: res.token };
   }
 
   public async register(userData: {
     name: string;
     email: string;
     password: string;
+    confirmPassword?: string;
     role: string;
     title: string;
     licenseNumber?: string;
@@ -124,25 +140,14 @@ class ApiClient {
     department?: string;
     phone?: string;
   }): Promise<{ user: UserAccount; token: string }> {
-    try {
-      const res = await this.request<{ success: boolean; user: UserAccount; token: string }>('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify(userData)
-      });
-      if (res.token) {
-        this.setAuthToken(res.token);
-      }
-      return { user: res.user, token: res.token };
-    } catch (err) {
-      console.warn('API register failed, falling back to local generation', err);
-      const newUser: UserAccount = {
-        ...userData,
-        role: userData.role as any,
-        id: `usr-${Date.now()}`,
-        joinedAt: 'Just now'
-      };
-      return { user: newUser, token: 'local-offline-session-token' };
+    const res = await this.request<{ success: boolean; user: UserAccount; token: string }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(userData)
+    });
+    if (res.token) {
+      this.setAuthToken(res.token);
     }
+    return { user: res.user, token: res.token };
   }
 
   public async getMe(): Promise<UserAccount | null> {

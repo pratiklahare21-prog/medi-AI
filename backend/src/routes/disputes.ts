@@ -1,8 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { db } from '../db';
-import { optionalAuth, AuthenticatedRequest } from '../middleware/auth';
+import { optionalAuth, requireAuth, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import type { UserRole } from '../types';
 
 export const disputesRouter = Router();
+
+const DISPUTE_RESOLVER_ROLES: UserRole[] = ['Lead Ops Admin', 'Clinical Pharmacist', 'Formulary Director'];
 
 // GET /api/disputes - list accuracy disputes
 disputesRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -13,16 +16,18 @@ disputesRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Res
       data: disputes
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to fetch disputes' });
+    const msg = err?.message || 'Failed to fetch disputes';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });
 
-// POST /api/disputes/:id/resolve - resolve dispute
-disputesRouter.post('/:id/resolve', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+// POST /api/disputes/:id/resolve - resolve dispute (requires auth & clinical role)
+disputesRouter.post('/:id/resolve', requireAuth, requireRole(DISPUTE_RESOLVER_ROLES), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { action } = req.body;
     if (!action) {
-      res.status(400).json({ success: false, error: 'Resolution action is required' });
+      const msg = 'Resolution action is required';
+      res.status(400).json({ success: false, message: msg, error: msg });
       return;
     }
 
@@ -35,6 +40,7 @@ disputesRouter.post('/:id/resolve', optionalAuth, async (req: AuthenticatedReque
       message: `Dispute ${req.params.id} resolved with decision: ${action}`
     });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || 'Failed to resolve dispute' });
+    const msg = err?.message || 'Failed to resolve dispute';
+    res.status(400).json({ success: false, message: msg, error: msg });
   }
 });

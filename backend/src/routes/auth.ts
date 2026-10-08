@@ -3,146 +3,206 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db';
 import { generateToken, requireAuth, AuthenticatedRequest } from '../middleware/auth';
 import { UserRole } from '../types';
+import {
+  loginSchema,
+  registerSchema,
+  validate,
+} from '../validators/authValidator';
 
 export const authRouter = Router();
 
-// POST /api/auth/login
-authRouter.post('/login', async (req: Request, res: Response) => {
-  try {
-    const { email, password } = req.body;
+const DEFAULT_TENANT_ID = 'TN-4092';
+const DEFAULT_TENANT_NAME = 'Apollo Health Network';
 
-    if (!email || typeof email !== 'string') {
-      res.status(400).json({ success: false, error: 'Email is required' });
-      return;
-    }
-
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = await db.getUserByEmail(normalizedEmail);
-
-    if (!user) {
-      // For development/demo convenience: allow instant mock user login if email not found
-      // but if password was provided and user doesn't exist, create a dynamic user
-      const dynamicUser = await db.createUser({
-        name: normalizedEmail.split('@')[0].replace('.', ' ').replace(/\b\w/g, l => l.toUpperCase()),
-        email: normalizedEmail,
-        password: password || 'Password123!',
-        role: 'Clinical Pharmacist',
-        title: 'Healthcare Practitioner',
-        tenantId: 'TN-4092',
-        tenantName: 'Apollo Health Network',
-        phone: '+91 98000 00000',
-        joinedAt: 'Today'
-      });
-
-      const token = generateToken(dynamicUser);
-      res.json({
-        success: true,
-        user: dynamicUser,
-        token
-      });
-      return;
-    }
-
-    // Verify password if user has passwordHash
-    if (user.passwordHash && password) {
-      const isMatch = bcrypt.compareSync(password, user.passwordHash);
-      if (!isMatch && password !== 'Password123!') {
-        res.status(401).json({ success: false, error: 'Invalid email or password' });
-        return;
-      }
-    }
-
-    const { passwordHash: _p, ...safeUser } = user;
-    const token = generateToken(safeUser);
-
-    await db.addAuditLog({
-      action: 'USER_SESSION_AUTHENTICATED',
-      actor: safeUser.name,
-      role: safeUser.role,
-      targetEntity: `Encrypted JWT session initiated for partition ${safeUser.tenantName}`,
-      tenantId: safeUser.tenantId,
-      tenantName: safeUser.tenantName,
-      status: 'Audited'
-    });
-
-    res.json({
-      success: true,
-      user: safeUser,
-      token
-    });
-  } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Login failed' });
+function defaultTitleForRole(role: UserRole): string {
+  switch (role) {
+    case 'Patient / Consumer':
+      return 'Patient';
+    case 'Lead Ops Admin':
+      return 'Operations Administrator';
+    case 'Prescribing Physician':
+      return 'Medical Practitioner';
+    case 'Formulary Director':
+      return 'Pharmacy & Therapeutics Lead';
+    case 'Clinical Pharmacist':
+    default:
+      return 'Healthcare Practitioner';
   }
-});
+}
 
 // POST /api/auth/register
-authRouter.post('/register', async (req: Request, res: Response) => {
-  try {
-    const { name, email, password, role, title, licenseNumber, tenantId, tenantName, department, phone } = req.body;
+authRouter.post(
+  '/register',
+  validate(registerSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const body = req.body as {
+        name: string;
+        email: string;
+        password: string;
+        confirmPassword: string;
+        role?: UserRole;
+        title?: string;
+        licenseNumber?: string;
+        department?: string;
+        phone?: string;
+        tenantId?: string;
+        tenantName?: string;
+      };
 
-    if (!name || !email || !password) {
-      res.status(400).json({ success: false, error: 'Name, email, and password are required' });
-      return;
+      const normalizedEmail = body.email.trim().toLowerCase();
+      const role: UserRole = body.role || 'Clinical Pharmacist';
+      const title = body.title || defaultTitleForRole(role);
+      const tenantId = body.tenantId || DEFAULT_TENANT_ID;
+      const tenantName = body.tenantName || DEFAULT_TENANT_NAME;
+
+      const existingUser = await db.getUserByEmail(normalizedEmail);
+      if (existingUser) {
+        res.status(409).json({
+          success: false,
+          message: 'An account with that email already exists',
+          error: 'An account with that email already exists',
+        });
+        return;
+      }
+
+      const newUser = await db.createUser({
+        name: body.name.trim(),
+        email: normalizedEmail,
+        password: body.password,
+        role,
+        title,
+        licenseNumber: body.licenseNumber || undefined,
+        tenantId,
+        tenantName,
+        department: body.department || undefined,
+        phone: body.phone || undefined,
+      });
+
+      const token = generateToken(newUser);
+
+      res.status(201).json({
+        success: true,
+        message: 'Account created successfully',
+        user: newUser,
+        token,
+      });
+    } catch (err: any) {
+      const msg = err?.message || 'Registration failed';
+      const isDuplicate = /already exists/i.test(msg);
+      const status = isDuplicate ? 409 : 400;
+      res.status(status).json({
+        success: false,
+        message: isDuplicate ? 'An account with that email already exists' : msg,
+        error: msg,
+      });
     }
-
-    if (password.length < 6) {
-      res.status(400).json({ success: false, error: 'Password must be at least 6 characters' });
-      return;
-    }
-
-    const newUser = await db.createUser({
-      name,
-      email: email.trim().toLowerCase(),
-      password,
-      role: (role as UserRole) || 'Clinical Pharmacist',
-      title: title || 'Clinical Pharmacist',
-      licenseNumber: licenseNumber || undefined,
-      tenantId: tenantId || 'TN-4092',
-      tenantName: tenantName || 'Apollo Health Network',
-      department: department || undefined,
-      phone: phone || undefined
-    });
-
-    const token = generateToken(newUser);
-
-    res.status(201).json({
-      success: true,
-      user: newUser,
-      token
-    });
-  } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || 'Registration failed' });
   }
-});
+);
+
+// POST /api/auth/login
+authRouter.post(
+  '/login',
+  validate(loginSchema),
+  async (req: Request, res: Response) => {
+    try {
+      const body = req.body as { email: string; password: string };
+      const normalizedEmail = body.email.trim().toLowerCase();
+
+      const user = await db.getUserByEmail(normalizedEmail);
+
+      // Always hash-compare in constant time style; never create users on login.
+      let isMatch = false;
+      if (user && user.passwordHash) {
+        isMatch = bcrypt.compareSync(body.password, user.passwordHash);
+      }
+
+      if (!user || !isMatch) {
+        // Generic message — no account enumeration.
+        res.status(401).json({
+          success: false,
+          message: 'Invalid email or password',
+          error: 'Invalid email or password',
+        });
+        return;
+      }
+
+      const { passwordHash: _p, ...safeUser } = user;
+
+      try {
+        await db.addAuditLog({
+          action: 'USER_SESSION_AUTHENTICATED',
+          actor: safeUser.name,
+          role: safeUser.role,
+          targetEntity: `Encrypted JWT session initiated for partition ${safeUser.tenantName}`,
+          tenantId: safeUser.tenantId,
+          tenantName: safeUser.tenantName,
+          status: 'Audited',
+        });
+      } catch {
+        // Non-fatal — login still succeeds even if audit log write fails.
+      }
+
+      const token = generateToken(safeUser);
+
+      res.json({
+        success: true,
+        message: 'Signed in successfully',
+        user: safeUser,
+        token,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Login failed',
+        error: 'Login failed',
+      });
+    }
+  }
+);
 
 // GET /api/auth/me
 authRouter.get('/me', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.user) {
-      res.status(401).json({ success: false, error: 'Not authenticated' });
+      res.status(401).json({
+        success: false,
+        message: 'Not authenticated',
+        error: 'Not authenticated',
+      });
       return;
     }
 
     const user = await db.getUserById(req.user.id);
     if (!user) {
-      res.status(404).json({ success: false, error: 'User account not found' });
+      res.status(404).json({
+        success: false,
+        message: 'User account not found',
+        error: 'User account not found',
+      });
       return;
     }
 
     const { passwordHash: _p, ...safeUser } = user;
     res.json({
       success: true,
-      user: safeUser
+      user: safeUser,
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to fetch user session' });
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user session',
+      error: 'Failed to fetch user session',
+    });
   }
 });
 
 // POST /api/auth/logout
-authRouter.post('/logout', (req: Request, res: Response) => {
+// Bearer tokens are stateless — client is responsible for discarding the token.
+// Future work: add a jti blacklist for true server-side revocation.
+authRouter.post('/logout', (_req: Request, res: Response) => {
   res.json({
     success: true,
-    message: 'Logged out successfully. Invalidate client session token.'
+    message: 'Logged out successfully. Client session token has been invalidated locally.',
   });
 });

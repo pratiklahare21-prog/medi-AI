@@ -1,10 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { db } from '../db';
+import { requireAuth, AuthenticatedRequest } from '../middleware/auth';
 
 export const tenantsRouter = Router();
 
-// GET /api/tenants - list all hospital / pharmacy tenants
-tenantsRouter.get('/', async (_req: Request, res: Response) => {
+// GET /api/tenants - list all hospital / pharmacy tenants (requires auth)
+tenantsRouter.get('/', requireAuth, async (_req: AuthenticatedRequest, res: Response) => {
   try {
     const tenants = await db.getTenants();
     res.json({
@@ -13,6 +14,7 @@ tenantsRouter.get('/', async (_req: Request, res: Response) => {
       data: tenants
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to fetch tenants' });
+    const msg = err?.message || 'Failed to fetch tenants';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });

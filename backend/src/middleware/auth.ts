@@ -2,8 +2,29 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UserAccount, UserRole } from '../types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'medi-ai-sastarx-jwt-secure-key-2026';
-const JWT_EXPIRES_IN = '7d';
+const ENV_JWT_SECRET = process.env.JWT_SECRET;
+const ENV_JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+const PLACEHOLDER_SECRETS = new Set([
+  '',
+  'your_secret_here',
+  'change_me',
+  'medi-ai-sastarx-jwt-secure-key-2026',
+]);
+
+if (!ENV_JWT_SECRET || PLACEHOLDER_SECRETS.has(ENV_JWT_SECRET.trim())) {
+  throw new Error(
+    '[FATAL] JWT_SECRET environment variable is missing or set to an insecure placeholder. ' +
+      'Set a strong, unique secret in your backend .env file before starting the server.'
+  );
+}
+
+const JWT_SECRET: string = ENV_JWT_SECRET;
+const JWT_EXPIRES_IN: string = ENV_JWT_EXPIRES_IN;
+
+export const JWT_CONFIG = {
+  expiresIn: JWT_EXPIRES_IN,
+} as const;
 
 export interface AuthTokenPayload {
   id: string;
@@ -30,7 +51,7 @@ export function generateToken(user: UserAccount): string {
     tenantName: user.tenantName
   };
 
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_CONFIG.expiresIn } as any);
 }
 
 // Verifies token (supports standard JWT and Firebase token fallback)
@@ -49,6 +70,7 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({
       success: false,
+      message: 'Authentication required',
       error: 'Authentication required. Missing or malformed Bearer token.'
     });
     return;
@@ -60,6 +82,7 @@ export function requireAuth(req: AuthenticatedRequest, res: Response, next: Next
   if (!payload) {
     res.status(401).json({
       success: false,
+      message: 'Session expired or invalid',
       error: 'Invalid or expired session token. Please log in again.'
     });
     return;
@@ -90,6 +113,7 @@ export function requireRole(allowedRoles: UserRole[]) {
     if (!req.user) {
       res.status(401).json({
         success: false,
+        message: 'Authentication required',
         error: 'Authentication required.'
       });
       return;
@@ -98,6 +122,7 @@ export function requireRole(allowedRoles: UserRole[]) {
     if (!allowedRoles.includes(req.user.role)) {
       res.status(403).json({
         success: false,
+        message: 'Access denied',
         error: `Access denied. Role '${req.user.role}' is not authorized for this operation.`
       });
       return;

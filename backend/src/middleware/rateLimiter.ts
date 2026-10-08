@@ -7,16 +7,18 @@
 import rateLimit from 'express-rate-limit';
 
 /**
- * Auth rate limiter: 20 requests per 15 minutes per IP.
+ * Auth rate limiter: 5 requests per 15 minutes per IP.
+ * Brute-force mitigation for login/register endpoints.
  * Applied to: POST /api/auth/login, POST /api/auth/register
  */
 export const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 minutes
-  max: 20,
+  max: 5,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   message: {
     success: false,
+    message: 'Too many authentication attempts',
     error: 'Too many authentication attempts. Please wait 15 minutes before retrying.',
   },
   skip: (req) => {

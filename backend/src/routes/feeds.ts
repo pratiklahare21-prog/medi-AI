@@ -1,8 +1,11 @@
-import { Router, Request, Response } from 'express';
+import { Router, Response } from 'express';
 import { db } from '../db';
-import { optionalAuth, AuthenticatedRequest } from '../middleware/auth';
+import { optionalAuth, requireAuth, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import type { UserRole } from '../types';
 
 export const feedsRouter = Router();
+
+const OPS_ADMIN_ROLES: UserRole[] = ['Lead Ops Admin'];
 
 // GET /api/feeds - list pricing feeds
 feedsRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -13,12 +16,13 @@ feedsRouter.get('/', optionalAuth, async (req: AuthenticatedRequest, res: Respon
       data: feeds
     });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message || 'Failed to fetch feeds' });
+    const msg = err?.message || 'Failed to fetch feeds';
+    res.status(500).json({ success: false, message: msg, error: msg });
   }
 });
 
-// POST /api/feeds/:id/retry - trigger feed resync
-feedsRouter.post('/:id/retry', optionalAuth, async (req: AuthenticatedRequest, res: Response) => {
+// POST /api/feeds/:id/retry - trigger feed resync (requires auth & admin role)
+feedsRouter.post('/:id/retry', requireAuth, requireRole(OPS_ADMIN_ROLES), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const feed = await db.retryFeed(req.params.id, req.tenantId);
     res.json({
@@ -27,6 +31,7 @@ feedsRouter.post('/:id/retry', optionalAuth, async (req: AuthenticatedRequest, r
       data: feed
     });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message || 'Failed to retry feed' });
+    const msg = err?.message || 'Failed to retry feed';
+    res.status(400).json({ success: false, message: msg, error: msg });
   }
 });

@@ -1,47 +1,41 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { 
-  AppViewMode, 
-  OpsNavigationTab, 
-  TenantInfo, 
-  MedicineCatalogEntry, 
-  PricingPartnerFeed, 
-  AccuracyDisputeItem, 
-  AuditLogItem, 
-  LinkedGenericCompound, 
-  PriceAlert, 
-  UserAccount 
+import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import {
+  AppViewMode,
+  OpsNavigationTab,
+  TenantInfo,
+  MedicineCatalogEntry,
+  PricingPartnerFeed,
+  AccuracyDisputeItem,
+  AuditLogItem,
+  LinkedGenericCompound,
+  PriceAlert,
+  UserAccount
 } from './types';
-import { 
-  INITIAL_TENANTS, 
-  INITIAL_CATALOG, 
-  INITIAL_FEEDS, 
-  INITIAL_DISPUTES, 
-  INITIAL_AUDIT_LOGS, 
+import {
+  INITIAL_TENANTS,
+  INITIAL_CATALOG,
+  INITIAL_FEEDS,
+  INITIAL_DISPUTES,
+  INITIAL_AUDIT_LOGS,
   CHRONIC_PACKS,
-  INITIAL_PRICE_ALERTS,
-  DEFAULT_USERS
+  INITIAL_PRICE_ALERTS
 } from './data/mockData';
 import { api } from './services/api';
+import { AuthProvider, useAuth } from './context/AuthContext';
 
-// Layout components — loaded eagerly (always visible)
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { LoginPage } from './components/LoginPage';
 
-// Auth — loaded eagerly (first thing user sees)
-import { AuthView } from './components/AuthView';
-
-// Always-present modals — load eagerly
 import { AuditLogModal } from './components/AuditLogModal';
 import { BioavailabilityModal } from './components/BioavailabilityModal';
 import { SetPriceAlertModal } from './components/SetPriceAlertModal';
 import { PriceAlertsDrawer } from './components/PriceAlertsDrawer';
 
-// Error handling & compliance — load eagerly (always active)
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { LegalModal } from './components/LegalModal';
 
-// Heavy views — code-split with React.lazy for faster initial bundle
 const DashboardView = lazy(() => import('./components/DashboardView').then(m => ({ default: m.DashboardView })));
 const CatalogView = lazy(() => import('./components/CatalogView').then(m => ({ default: m.CatalogView })));
 const PricingFeedsView = lazy(() => import('./components/PricingFeedsView').then(m => ({ default: m.PricingFeedsView })));
@@ -50,17 +44,14 @@ const MultiTenantConfigView = lazy(() => import('./components/MultiTenantConfigV
 const PatientPortalView = lazy(() => import('./components/PatientPortalView').then(m => ({ default: m.PatientPortalView })));
 const ArchitectureView = lazy(() => import('./components/ArchitectureView').then(m => ({ default: m.ArchitectureView })));
 
-// Phase 5 new views — code-split
 const MedicineComparisonView = lazy(() => import('./components/MedicineComparisonView').then(m => ({ default: m.MedicineComparisonView })));
 const SavingsDashboardView = lazy(() => import('./components/SavingsDashboardView').then(m => ({ default: m.SavingsDashboardView })));
 const SuperAdminView = lazy(() => import('./components/SuperAdminView').then(m => ({ default: m.SuperAdminView })));
 
-// Lazy modals
 const AddMedicineModal = lazy(() => import('./components/AddMedicineModal').then(m => ({ default: m.AddMedicineModal })));
 const LinkGenericModal = lazy(() => import('./components/LinkGenericModal').then(m => ({ default: m.LinkGenericModal })));
 const AiDisputeModal = lazy(() => import('./components/AiDisputeModal').then(m => ({ default: m.AiDisputeModal })));
 
-/** Reusable skeleton shown while lazy chunks load */
 const ViewLoader: React.FC<{ label?: string }> = ({ label }) => (
   <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-400 gap-3">
     <div className="w-8 h-8 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin"></div>
@@ -68,43 +59,42 @@ const ViewLoader: React.FC<{ label?: string }> = ({ label }) => (
   </div>
 );
 
-export default function App() {
+const SuperAdminGate: React.FC<{ children: React.ReactNode; currentUser: UserAccount | null }> = ({
+  children,
+  currentUser
+}) => {
+  const allowed = useMemo(
+    () => currentUser?.role === 'Lead Ops Admin' || currentUser?.role === 'Formulary Director',
+    [currentUser]
+  );
+  if (allowed) return <>{children}</>;
+  return (
+    <div className="max-w-2xl mx-auto bg-white border border-slate-200 rounded-2xl p-8 text-center">
+      <h2 className="text-lg font-semibold text-slate-900 mb-2">403 · Access Restricted</h2>
+      <p className="text-sm text-slate-500">
+        The Super Admin panel is available only to users with the <span className="font-medium text-slate-700">Lead Ops Admin</span> or{' '}
+        <span className="font-medium text-slate-700">Formulary Director</span> role.
+      </p>
+    </div>
+  );
+};
+
+function AppShell() {
+  const { currentUser, loading: authLoading, logout, hasRole } = useAuth();
+
   const [viewMode, setViewMode] = useState<AppViewMode>('clinical-ops');
   const [opsTab, setOpsTab] = useState<OpsNavigationTab>('dashboard-and-analytics');
   const [currentTenant, setCurrentTenant] = useState<TenantInfo>(INITIAL_TENANTS[0]);
   const [globalSearch, setGlobalSearch] = useState('');
 
-  // User Authentication & Session State
-  const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>(() => {
-    try {
-      const saved = localStorage.getItem('sastarx_registered_users');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return DEFAULT_USERS;
-  });
-
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      const saved = localStorage.getItem('sastarx_current_user');
-      if (saved === 'null') return null;
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return DEFAULT_USERS[0];
-  });
-
-  const [isAuthScreenOpen, setIsAuthScreenOpen] = useState(false);
-
-  // Domain state
   const [catalog, setCatalog] = useState<MedicineCatalogEntry[]>(INITIAL_CATALOG);
   const [feeds, setFeeds] = useState<PricingPartnerFeed[]>(INITIAL_FEEDS);
   const [disputes, setDisputes] = useState<AccuracyDisputeItem[]>(INITIAL_DISPUTES);
   const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>(INITIAL_AUDIT_LOGS);
   const [priceAlerts, setPriceAlerts] = useState<PriceAlert[]>(INITIAL_PRICE_ALERTS);
 
-  // Cart state for Patient Portal
   const [cartItems, setCartItems] = useState<Array<{ name: string; price: number; originalPrice: number; savings: number }>>([]);
 
-  // Modals state
   const [bioavailabilityMed, setBioavailabilityMed] = useState<MedicineCatalogEntry | null>(null);
   const [addMedicineOpen, setAddMedicineOpen] = useState(false);
   const [linkGenericMed, setLinkGenericMed] = useState<MedicineCatalogEntry | null>(null);
@@ -114,10 +104,9 @@ export default function App() {
   const [aiTriageDispute, setAiTriageDispute] = useState<AccuracyDisputeItem | null>(null);
   const [legalModal, setLegalModal] = useState<{ open: boolean; type: 'privacy' | 'terms' }>({
     open: false,
-    type: 'privacy',
+    type: 'privacy'
   });
 
-  // Listen for legal modal events from CookieConsentBanner
   useEffect(() => {
     const openPrivacy = () => setLegalModal({ open: true, type: 'privacy' });
     const openTerms = () => setLegalModal({ open: true, type: 'terms' });
@@ -129,10 +118,21 @@ export default function App() {
     };
   }, []);
 
-  // Hydrate data from backend API on mount
   useEffect(() => {
-    let isMounted = true;
+    if (!currentUser) return;
+    const tenantFromUser = INITIAL_TENANTS.find(t => t.tenantCode === currentUser.tenantId) || INITIAL_TENANTS[0];
+    setCurrentTenant(tenantFromUser);
+    api.setTenantId(tenantFromUser.tenantCode);
+    if (currentUser.role === 'Patient / Consumer') {
+      setViewMode('patient-portal');
+    } else {
+      setViewMode('clinical-ops');
+    }
+  }, [currentUser]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    let isMounted = true;
     async function loadData() {
       try {
         const [backendCatalog, backendFeeds, backendDisputes, backendLogs, backendAlerts] = await Promise.all([
@@ -142,7 +142,6 @@ export default function App() {
           api.getAuditLogs(),
           api.getPriceAlerts()
         ]);
-
         if (isMounted) {
           if (backendCatalog && backendCatalog.length > 0) setCatalog(backendCatalog);
           if (backendFeeds && backendFeeds.length > 0) setFeeds(backendFeeds);
@@ -154,22 +153,19 @@ export default function App() {
         console.warn('Initial API sync failed, continuing with initial datasets', e);
       }
     }
-
     loadData();
-
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [currentUser]);
 
-  // Helper to append cryptographic audit log
   const logAction = async (action: string, details: string) => {
     try {
       const newLog = await api.createAuditLog({
         action,
         targetEntity: details,
-        actor: currentUser?.name || 'Dr. Sarah Jenkins',
-        role: currentUser?.role || 'Lead Ops Admin',
+        actor: currentUser?.name,
+        role: currentUser?.role,
         status: 'Audited'
       });
       setAuditLogs(prev => [newLog, ...prev]);
@@ -177,7 +173,7 @@ export default function App() {
       const fallbackLog: AuditLogItem = {
         id: `audit-${Date.now()}`,
         action,
-        actor: currentUser?.name || 'Dr. Sarah Jenkins',
+        actor: currentUser?.name || 'System Clinician',
         role: currentUser?.role || 'Lead Ops Admin',
         targetEntity: details,
         tenantId: currentTenant.tenantCode,
@@ -190,77 +186,16 @@ export default function App() {
     }
   };
 
-  // Auth Handlers
-  const handleLoginSuccess = (user: UserAccount) => {
-    setCurrentUser(user);
-    try {
-      localStorage.setItem('sastarx_current_user', JSON.stringify(user));
-    } catch (e) {}
-    setIsAuthScreenOpen(false);
-
-    // Sync tenant if user has one
-    const matchingTenant = INITIAL_TENANTS.find(t => t.tenantCode === user.tenantId);
-    if (matchingTenant) {
-      setCurrentTenant(matchingTenant);
-      api.setTenantId(matchingTenant.tenantCode);
-    }
-
-    // Role-based view selection
-    if (user.role === 'Patient / Consumer') {
-      setViewMode('patient-portal');
-    } else {
-      setViewMode('clinical-ops');
-    }
-
-    logAction('USER_SESSION_AUTHENTICATED', `Encrypted session initiated by ${user.name} (${user.role}) for partition ${user.tenantName}`);
-  };
-
-  const handleRegisterUser = (newUser: UserAccount) => {
-    setRegisteredUsers(prev => {
-      const updated = [newUser, ...prev];
-      try {
-        localStorage.setItem('sastarx_registered_users', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-    logAction('NEW_USER_REGISTERED', `Practitioner registration completed for ${newUser.name} (Council No: ${newUser.licenseNumber || 'N/A'})`);
-  };
-
   const handleLogout = async () => {
     if (currentUser) {
       logAction('USER_LOGOUT', `User ${currentUser.name} signed out of clinical session.`);
     }
-    await api.logout();
-    setCurrentUser(null);
-    try {
-      localStorage.setItem('sastarx_current_user', 'null');
-    } catch (e) {}
-    setIsAuthScreenOpen(true);
+    await logout();
   };
 
-  const handleContinueAsGuest = () => {
-    const guestUser: UserAccount = {
-      id: 'usr-guest',
-      name: 'Guest Clinician',
-      email: 'guest@sastarx.internal',
-      role: 'Clinical Pharmacist',
-      title: 'Visiting Practitioner (Read-Only Mode)',
-      tenantId: currentTenant.tenantCode,
-      tenantName: currentTenant.name,
-      joinedAt: 'Today'
-    };
-    setCurrentUser(guestUser);
-    setIsAuthScreenOpen(false);
-    logAction('GUEST_SESSION_STARTED', 'Exploratory session started without credentials.');
-  };
-
-  // Price Alert handlers
   const handleSaveAlert = async (alertData: Omit<PriceAlert, 'id' | 'createdAt'> & { id?: string }) => {
     if (alertData.id) {
-      // Update existing
-      setPriceAlerts(prev =>
-        prev.map(a => (a.id === alertData.id ? { ...a, ...alertData } : a))
-      );
+      setPriceAlerts(prev => prev.map(a => (a.id === alertData.id ? { ...a, ...alertData } : a)));
       try {
         await api.updatePriceAlert(alertData.id, alertData);
       } catch (e) {
@@ -271,17 +206,12 @@ export default function App() {
         `Updated price drop alert threshold for ${alertData.medicineName} to ₹${alertData.targetThresholdPrice}`
       );
     } else {
-      // Create new
       const tempId = `alert-${Date.now()}`;
-      const newAlert: PriceAlert = {
-        ...alertData,
-        id: tempId,
-        createdAt: 'Just now'
-      };
+      const newAlert: PriceAlert = { ...alertData, id: tempId, createdAt: 'Just now' };
       setPriceAlerts(prev => [newAlert, ...prev]);
       try {
         const created = await api.createPriceAlert(alertData);
-        setPriceAlerts(prev => prev.map(a => a.id === tempId ? created : a));
+        setPriceAlerts(prev => prev.map(a => (a.id === tempId ? created : a)));
       } catch (e) {
         console.warn('Failed to persist price alert via API', e);
       }
@@ -341,8 +271,6 @@ export default function App() {
         };
       })
     );
-
-    // Also update lowestGenericPrice on corresponding medicine in catalog so table reflects the drop!
     const targetAlert = priceAlerts.find(a => a.id === alertId);
     if (targetAlert) {
       setCatalog(prev =>
@@ -359,7 +287,6 @@ export default function App() {
         })
       );
     }
-
     try {
       await api.simulatePriceDrop(alertId, simulatedPrice);
     } catch (e) {
@@ -367,7 +294,6 @@ export default function App() {
     }
   };
 
-  // Handlers
   const handleToggleGenericInRx = async (medId: string, genericId: string) => {
     setCatalog(prev =>
       prev.map(med => {
@@ -435,7 +361,6 @@ export default function App() {
         };
       })
     );
-
     try {
       const updatedFeed = await api.retryFeed(feedId);
       setTimeout(() => {
@@ -477,22 +402,16 @@ export default function App() {
 
   const totalCartSavings = cartItems.reduce((acc, curr) => acc + curr.savings, 0);
 
-  // If user logged out or explicitly opened the auth screen
-  if (currentUser === null || isAuthScreenOpen) {
-    return (
-      <AuthView
-        onLoginSuccess={handleLoginSuccess}
-        onContinueAsGuest={handleContinueAsGuest}
-        availableTenants={INITIAL_TENANTS}
-        registeredUsers={registeredUsers}
-        onRegisterUser={handleRegisterUser}
-      />
-    );
+  if (authLoading) {
+    return <ViewLoader label="Authenticating session..." />;
+  }
+
+  if (!currentUser) {
+    return <LoginPage />;
   }
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-slate-900 flex flex-col font-body-md antialiased selection:bg-blue-100 selection:text-blue-900">
-      {/* Universal Fixed Header */}
+    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
       <Header
         currentMode={viewMode}
         onModeChange={setViewMode}
@@ -519,12 +438,10 @@ export default function App() {
         onOpenPriceAlerts={() => setPriceAlertsDrawerOpen(true)}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onOpenAuth={() => setIsAuthScreenOpen(true)}
+        onOpenAuth={handleLogout}
       />
 
-      {/* Main Container Layout */}
-      <div className="flex-1 flex pt-14">
-        {/* Ops Sidebar (Visible when in clinical-ops mode) */}
+      <div className="flex-1 flex pt-16">
         {viewMode === 'clinical-ops' && (
           <Sidebar
             currentTab={opsTab}
@@ -537,13 +454,11 @@ export default function App() {
           />
         )}
 
-        {/* View Content Area */}
         <main
           className={`flex-1 transition-all ${
             viewMode === 'clinical-ops' ? 'md:ml-64 p-4 lg:p-6' : 'p-4 lg:p-8 max-w-7xl mx-auto w-full'
           }`}
         >
-          {/* 1. CLINICAL OPS VIEWS */}
           {viewMode === 'clinical-ops' && (
             <>
               {opsTab === 'dashboard-and-analytics' && (
@@ -596,11 +511,7 @@ export default function App() {
               {opsTab === 'pricing-feeds-and-partners' && (
                 <ErrorBoundary context="Pricing Feeds">
                   <Suspense fallback={<ViewLoader label="Loading Feeds..." />}>
-                    <PricingFeedsView
-                      feeds={feeds}
-                      onRetryFeed={handleRetryFeed}
-                      onRefreshAll={() => feeds.forEach(f => handleRetryFeed(f.id))}
-                    />
+                    <PricingFeedsView feeds={feeds} onRetryFeed={handleRetryFeed} onRefreshAll={() => feeds.forEach(f => handleRetryFeed(f.id))} />
                   </Suspense>
                 </ErrorBoundary>
               )}
@@ -633,7 +544,6 @@ export default function App() {
                 </ErrorBoundary>
               )}
 
-              {/* Phase 5 New Views */}
               {opsTab === 'medicine-comparison' && (
                 <ErrorBoundary context="Medicine Comparison">
                   <Suspense fallback={<ViewLoader label="Loading Comparison Tool..." />}>
@@ -653,14 +563,15 @@ export default function App() {
               {opsTab === 'super-admin-panel' && (
                 <ErrorBoundary context="Super Admin Panel">
                   <Suspense fallback={<ViewLoader label="Loading Admin Panel..." />}>
-                    <SuperAdminView tenants={INITIAL_TENANTS} currentUser={currentUser} />
+                    <SuperAdminGate currentUser={currentUser}>
+                      <SuperAdminView tenants={INITIAL_TENANTS} currentUser={currentUser} />
+                    </SuperAdminGate>
                   </Suspense>
                 </ErrorBoundary>
               )}
             </>
           )}
 
-          {/* 2. PATIENT DISCOVERY PORTAL */}
           {viewMode === 'patient-portal' && (
             <ErrorBoundary context="Patient Portal">
               <Suspense fallback={<ViewLoader label="Loading Patient Portal..." />}>
@@ -678,7 +589,6 @@ export default function App() {
             </ErrorBoundary>
           )}
 
-          {/* 3. MULTI-TENANT SAAS SYSTEM ARCHITECTURE */}
           {viewMode === 'system-architecture' && (
             <ErrorBoundary context="Architecture View">
               <Suspense fallback={<ViewLoader label="Loading Architecture..." />}>
@@ -689,35 +599,18 @@ export default function App() {
         </main>
       </div>
 
-      {/* Modals & Dialogs */}
-      <BioavailabilityModal
-        medicine={bioavailabilityMed}
-        onClose={() => setBioavailabilityMed(null)}
-      />
+      <BioavailabilityModal medicine={bioavailabilityMed} onClose={() => setBioavailabilityMed(null)} />
 
       <Suspense fallback={null}>
-        <AddMedicineModal
-          isOpen={addMedicineOpen}
-          onClose={() => setAddMedicineOpen(false)}
-          onAdd={handleAddMedicine}
-        />
+        <AddMedicineModal isOpen={addMedicineOpen} onClose={() => setAddMedicineOpen(false)} onAdd={handleAddMedicine} />
       </Suspense>
 
       <Suspense fallback={null}>
-        <LinkGenericModal
-          medicine={linkGenericMed}
-          onClose={() => setLinkGenericMed(null)}
-          onLink={handleLinkGeneric}
-        />
+        <LinkGenericModal medicine={linkGenericMed} onClose={() => setLinkGenericMed(null)} onLink={handleLinkGeneric} />
       </Suspense>
 
-      <AuditLogModal
-        isOpen={auditLogsModalOpen}
-        onClose={() => setAuditLogsModalOpen(false)}
-        logs={auditLogs}
-      />
+      <AuditLogModal isOpen={auditLogsModalOpen} onClose={() => setAuditLogsModalOpen(false)} logs={auditLogs} />
 
-      {/* Price Alert Creation & Config Modal */}
       {alertModalMed && (
         <SetPriceAlertModal
           isOpen={!!alertModalMed}
@@ -728,7 +621,6 @@ export default function App() {
         />
       )}
 
-      {/* Price Alerts Watchlist Drawer */}
       <PriceAlertsDrawer
         isOpen={priceAlertsDrawerOpen}
         alerts={priceAlerts}
@@ -739,7 +631,6 @@ export default function App() {
         onSimulateDrop={handleSimulatePriceDrop}
       />
 
-      {/* AI Dispute Triage Modal */}
       <Suspense fallback={null}>
         <AiDisputeModal
           isOpen={!!aiTriageDispute}
@@ -752,17 +643,10 @@ export default function App() {
         />
       </Suspense>
 
-      {/* Compliance: Privacy Policy & Terms of Service */}
-      <LegalModal
-        isOpen={legalModal.open}
-        type={legalModal.type}
-        onClose={() => setLegalModal(prev => ({ ...prev, open: false }))}
-      />
+      <LegalModal isOpen={legalModal.open} type={legalModal.type} onClose={() => setLegalModal(prev => ({ ...prev, open: false }))} />
 
-      {/* Cookie / Data Consent Banner */}
       <CookieConsentBanner />
 
-      {/* Global Compact Status Footer */}
       <footer className="fixed bottom-0 left-0 right-0 h-8 bg-slate-900 border-t border-slate-800 text-slate-400 flex items-center justify-between px-4 z-40 text-[11px] font-code-mono">
         <div className="flex items-center gap-3">
           <span className="flex items-center gap-1.5 text-emerald-400">
@@ -770,20 +654,23 @@ export default function App() {
             CDSCO National Registry: Synchronized
           </span>
           <span className="hidden md:inline text-slate-600">|</span>
-          <span className="hidden md:inline text-slate-400">
-            Schema: {currentTenant.schema}
-          </span>
+          <span className="hidden md:inline text-slate-400">Schema: {currentTenant.schema}</span>
         </div>
-
         <div className="flex items-center gap-4">
           <span className="text-slate-400">
             DISHA / HIPAA RLS: <strong className="text-emerald-400">Enforced</strong>
           </span>
-          <span className="hidden sm:inline text-slate-500">
-            v3.0.0-prod
-          </span>
+          <span className="hidden sm:inline text-slate-500">v3.0.0-prod</span>
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
   );
 }

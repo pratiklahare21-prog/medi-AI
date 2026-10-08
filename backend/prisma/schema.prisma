@@ -1,8 +1,7 @@
-// Prisma Schema for medi AI / SastaRx — PostgreSQL (Supabase)
+// Prisma Schema for medi AI / SastaRx — MongoDB Atlas
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -10,7 +9,7 @@ generator client {
 }
 
 model Tenant {
-  id          String   @id @default(uuid())
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   shortCode   String   @unique
   tenantCode  String   @unique
@@ -31,7 +30,7 @@ model Tenant {
 }
 
 model User {
-  id            String   @id @default(uuid())
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
   email         String   @unique
   passwordHash  String
   name          String
@@ -42,7 +41,7 @@ model User {
   phone         String?
   joinedAt      DateTime @default(now())
 
-  tenantId      String
+  tenantId      String   @db.ObjectId
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   priceAlerts   PriceAlert[]
 
@@ -50,7 +49,7 @@ model User {
 }
 
 model Medicine {
-  id                       String   @id @default(uuid())
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
   brandName                String
   manufacturer             String
   formulationType          String
@@ -75,7 +74,7 @@ model Medicine {
   dissolutionNote          String?
   createdAt                DateTime @default(now())
 
-  tenantId                 String?
+  tenantId                 String?  @db.ObjectId
   tenant                   Tenant?  @relation(fields: [tenantId], references: [id])
   generics                 GenericBioequivalent[]
   priceAlerts              PriceAlert[]
@@ -84,7 +83,7 @@ model Medicine {
 }
 
 model GenericBioequivalent {
-  id                    String   @id @default(uuid())
+  id                    String   @id @default(auto()) @map("_id") @db.ObjectId
   name                  String
   manufacturer          String
   compositionMatch      String
@@ -96,14 +95,14 @@ model GenericBioequivalent {
   formularyStatus       String   @default("Standard")
   similarityFactorF2    Float?
 
-  medicineId            String
+  medicineId            String   @db.ObjectId
   medicine              Medicine @relation(fields: [medicineId], references: [id], onDelete: Cascade)
 
   @@map("generic_bioequivalents")
 }
 
 model PricingFeed {
-  id               String   @id @default(uuid())
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
   name             String
   type             String   // e.g. "Realtime SKU API", "Catalog Pipeline"
   status           String   @default("Healthy")
@@ -116,14 +115,14 @@ model PricingFeed {
   notes            String?
   endpointUrl      String?
 
-  tenantId         String?
+  tenantId         String?  @db.ObjectId
   tenant           Tenant?  @relation(fields: [tenantId], references: [id])
 
   @@map("pricing_feeds")
 }
 
 model PriceAlert {
-  id                   String    @id @default(uuid())
+  id                   String    @id @default(auto()) @map("_id") @db.ObjectId
   medicineName         String
   activeSalt           String
   brandedMrp           Float
@@ -138,16 +137,16 @@ model PriceAlert {
   triggeredBrand       String?
   notes                String?
 
-  medicineId           String
+  medicineId           String    @db.ObjectId
   medicine             Medicine  @relation(fields: [medicineId], references: [id], onDelete: Cascade)
-  userId               String?
+  userId               String?   @db.ObjectId
   user                 User?     @relation(fields: [userId], references: [id])
 
   @@map("price_alerts")
 }
 
 model Dispute {
-  id                     String   @id @default(uuid())
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
   title                  String
   feedSource             String
   feedCode               String
@@ -160,14 +159,14 @@ model Dispute {
   clinicalReportsCount   Int      @default(1)
   status                 String   @default("Open")
 
-  tenantId               String
+  tenantId               String   @db.ObjectId
   tenant                 Tenant   @relation(fields: [tenantId], references: [id])
 
   @@map("disputes")
 }
 
 model AuditLog {
-  id                String   @id @default(uuid())
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
   timestamp         DateTime @default(now())
   actor             String
   role              String
@@ -178,7 +177,7 @@ model AuditLog {
   details           String?
   status            String   @default("Success")
 
-  tenantId          String
+  tenantId          String   @db.ObjectId
   tenant            Tenant   @relation(fields: [tenantId], references: [id])
 
   @@map("audit_logs")

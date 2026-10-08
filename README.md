@@ -188,6 +188,118 @@ npm run build:frontend
 
 ---
 
+## 🔐 Authentication, Authorization & Validation
+
+### Local Setup (5 steps)
+
+1. **Install frontend dependencies**
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. **Install backend dependencies**
+   ```bash
+   cd ../backend
+   npm install
+   ```
+3. **Configure environment variables**
+   ```bash
+   # Backend
+   cp backend/.env.example backend/.env
+   # -> set JWT_SECRET (strong value), FRONTEND_URL, GEMINI_API_KEY
+
+   # Frontend
+   cp frontend/.env.example frontend/.env
+   # -> set VITE_API_URL (e.g. http://localhost:3001 in dev)
+   ```
+4. **Start the backend** (port 3001)
+   ```bash
+   cd backend
+   npm run dev
+   ```
+5. **Start the frontend** (port 3000)
+   ```bash
+   cd ../frontend
+   npm run dev
+   ```
+
+### Authentication architecture
+
+```
+Frontend (React + AuthProvider)
+        │
+        ▼  Bearer token in Authorization header
+Authentication API  (/api/auth/*)
+        │
+        ▼
+Backend (Express global error handler + CORS whitelist)
+        │
+        ▼
+Auth Middleware (requireAuth -> 401)
+        │
+        ▼
+Authorization Middleware (requireRole -> 403)
+        │
+        ▼
+Controller  (authValidator Zod schemas -> 400)
+        │
+        ▼
+Database  (DatabaseManager: unique email, bcrypt hash)
+```
+
+### Auth endpoints
+
+| Method | Path | Purpose | Auth |
+|--------|------|---------|------|
+| POST | `/api/auth/register` | Create a new user account | Public |
+| POST | `/api/auth/login`    | Exchange credentials for JWT | Public |
+| GET  | `/api/auth/me`       | Current safe-user info      | Authenticated |
+| POST | `/api/auth/logout`   | Client-side session clear   | Authenticated |
+
+- JWT secret is loaded from `JWT_SECRET` env only. If missing/placeholder the backend refuses to start.
+- Tokens expire after `JWT_EXPIRES_IN` (default `7d`).
+- 401 responses auto-clear the session on the frontend via a global interceptor.
+- Login responses are intentionally generic ("Invalid email or password") to avoid account enumeration.
+- Passwords are hashed with bcryptjs; plaintext values are never stored or logged.
+
+### Authorization (RBAC)
+
+- `requireAuth` — 401 if no valid Bearer token.
+- `requireRole([...])` — 403 if the user's role isn't in the allow-list.
+- Protected admin endpoints: `/api/audit-logs` (reads require Lead Ops Admin / Formulary Director); `/api/price-alerts/*`, `/api/catalog` writes, `/api/ai/*`, `/api/feeds/:id/retry`, `/api/disputes/:id/resolve`, `/api/tenants` all require authentication.
+- The Super Admin UI also shows a 403 inline card, but the backend enforces the real guard. Never trust the frontend alone.
+
+### Validation
+
+- **Backend** — Zod schemas in `backend/src/validators/authValidator.ts` enforce:
+  - name: 2–100 chars
+  - email: valid format, normalized lowercase
+  - password: 8–128 chars, 1 uppercase, 1 lowercase, 1 number, 1 special symbol
+  - confirmPassword: must match password
+  - role: allowed enum only
+  - All 400 responses return `{ success, message, error, errors }` with a per-field map.
+- **Frontend** — same rule set applied live in `LoginPage.tsx` (Sign In / Create Account tabs) with inline field errors.
+
+### Environment variables
+
+Backend (`backend/.env`):
+- `PORT` (default 3001)
+- `NODE_ENV`
+- `FRONTEND_URL` (comma-separated allowed origins, credentials allowed)
+- `JWT_SECRET` **(required)**
+- `JWT_EXPIRES_IN` (e.g. `7d`)
+- `GEMINI_API_KEY` (for AI endpoints)
+- `DATABASE_URL` (optional, for future Prisma migrations)
+
+Frontend (`frontend/.env`):
+- `VITE_API_URL` — backend base URL (client-visible)
+- `VITE_APP_TITLE` — browser tab title
+
+Never use `VITE_*` for secrets such as `JWT_SECRET` or database credentials.
+
+---
+
+
 ## 🏥 Product Overview & Core Modules
 
 ### 1. Patient Discovery Portal
