@@ -33,7 +33,7 @@ export type ApiErrorShape = {
   errors?: Record<string, string>;
 };
 
-class ApiError extends Error {
+export class ApiError extends Error {
   public status: number;
   public errors?: Record<string, string>;
   public raw: ApiErrorShape;

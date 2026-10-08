@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Eye, EyeOff, Loader2, Pill } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Pill, ShieldCheck, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { UserRole } from '../types';
 
@@ -21,12 +21,26 @@ const TITLE_FOR_ROLE: Record<UserRole, string> = {
   'Patient / Consumer': 'Patient / Beneficiary'
 };
 
+interface DemoUserPreset {
+  label: string;
+  role: UserRole;
+  email: string;
+  badge: string;
+}
+
+const DEMO_USERS: DemoUserPreset[] = [
+  { label: 'Admin', role: 'Lead Ops Admin', email: 'aditi.rao@apollo.in', badge: 'Full Access' },
+  { label: 'Pharmacist', role: 'Clinical Pharmacist', email: 'priya.sharma@apollo.in', badge: 'Clinical Ops' },
+  { label: 'Doctor', role: 'Prescribing Physician', email: 'dr.rajesh@apollo.in', badge: 'Prescriptions' },
+  { label: 'Patient', role: 'Patient / Consumer', email: 'vikram.mehta@gmail.com', badge: 'Patient Portal' }
+];
+
 const passwordRules = (pwd: string): { ok: boolean; label: string }[] => [
-  { ok: pwd.length >= 8, label: '8 characters minimum' },
+  { ok: pwd.length >= 8, label: '8+ characters' },
   { ok: /[a-z]/.test(pwd), label: 'One lowercase letter' },
   { ok: /[A-Z]/.test(pwd), label: 'One uppercase letter' },
   { ok: /[0-9]/.test(pwd), label: 'One number' },
-  { ok: /[^A-Za-z0-9]/.test(pwd), label: 'One special character' }
+  { ok: /[^A-Za-z0-9]/.test(pwd), label: 'One special symbol' }
 ];
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -38,8 +52,8 @@ export const LoginPage: React.FC = () => {
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('priya.sharma@apollo.in');
+  const [password, setPassword] = useState('Password123!');
 
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -65,6 +79,14 @@ export const LoginPage: React.FC = () => {
     ...localErrors
   };
 
+  const applyDemoUser = (demo: DemoUserPreset) => {
+    setTab('login');
+    setEmail(demo.email);
+    setPassword('Password123!');
+    clearError();
+    setLocalErrors({});
+  };
+
   const validateLogin = (): boolean => {
     const next: Record<string, string> = {};
     const e = email.trim().toLowerCase();
@@ -82,7 +104,7 @@ export const LoginPage: React.FC = () => {
     if (name.length < 2) next.name = 'Name must be at least 2 characters';
     if (!e) next.email = 'Email is required';
     else if (!emailRegex.test(e)) next.email = 'Invalid email address';
-    if (!pwAllOk) next.password = 'Password does not meet requirements';
+    if (!pwAllOk) next.password = 'Password does not meet security requirements';
     if (!regConfirm) next.confirmPassword = 'Confirm your password';
     else if (regPassword !== regConfirm) next.confirmPassword = 'Passwords do not match';
     setLocalErrors(next);
@@ -96,7 +118,7 @@ export const LoginPage: React.FC = () => {
     try {
       await login(email.trim().toLowerCase(), password);
     } catch {
-      /* auth context captures the error */
+      /* Handled in AuthContext */
     }
   };
 
@@ -119,55 +141,59 @@ export const LoginPage: React.FC = () => {
         licenseNumber: regLicense.trim() || undefined
       });
     } catch {
-      /* auth context captures the error */
+      /* Handled in AuthContext */
     }
   };
 
   const inputClass = (key: string) =>
-    `w-full px-3 py-2 bg-white border rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:border-blue-600 focus:ring-blue-600 transition ${
-      allFieldErrors[key] ? 'border-red-400 focus:border-red-500 focus:ring-red-500' : 'border-slate-300'
+    `w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition shadow-xs ${
+      allFieldErrors[key] ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20' : 'border-slate-300'
     }`;
 
   const Label: React.FC<{ children: React.ReactNode; htmlFor: string }> = ({ children, htmlFor }) => (
-    <label htmlFor={htmlFor} className="block text-xs font-medium text-slate-700 mb-1">
+    <label htmlFor={htmlFor} className="block text-xs font-semibold text-slate-700 mb-1.5">
       {children}
     </label>
   );
 
   const FieldError: React.FC<{ name: string }> = ({ name }) =>
     allFieldErrors[name] ? (
-      <p className="mt-1 text-[11px] text-red-600 leading-tight">{allFieldErrors[name]}</p>
+      <p className="mt-1 text-xs text-red-600 leading-tight">{allFieldErrors[name]}</p>
     ) : null;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center px-4 py-10 text-slate-800">
-      <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-sm p-6 sm:p-8">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20 flex flex-col justify-center items-center px-4 py-8 text-slate-800">
+      <div className="w-full max-w-md bg-white border border-slate-200/80 rounded-3xl shadow-xl shadow-slate-200/50 p-6 sm:p-8 backdrop-blur-xs">
+        {/* Header Branding */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center gap-2 mb-3">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-blue-600 text-white shadow-sm">
-              <Pill size={18} />
+          <div className="inline-flex items-center justify-center gap-2.5 mb-3">
+            <div className="inline-flex items-center justify-center w-11 h-11 rounded-2xl bg-blue-600 text-white shadow-md shadow-blue-500/30">
+              <Pill size={22} className="rotate-45" />
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-xl font-bold tracking-tight text-slate-900">
-                medi <span className="text-blue-600">AI</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-extrabold tracking-tight text-slate-900">
+                medi<span className="text-blue-600">AI</span>
               </span>
-              <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-semibold">
+              <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200/60 text-blue-700 text-xs font-bold">
                 SastaRx
               </span>
             </div>
           </div>
-          <p className="text-xs text-slate-500">
-            {tab === 'login' ? 'Sign in to your clinical account' : 'Create a new clinical account'}
+          <p className="text-xs text-slate-500 font-medium">
+            {tab === 'login' ? 'Clinical Operations & Patient Discovery Portal' : 'Register a new clinical or patient account'}
           </p>
         </div>
 
-        <div className="mb-5 grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-lg">
+        {/* Mode Toggle Tabs */}
+        <div className="mb-5 grid grid-cols-2 gap-1 p-1 bg-slate-100/80 rounded-xl border border-slate-200/60">
           <button
             type="button"
             onClick={() => setTab('login')}
             disabled={loading}
-            className={`rounded-md text-xs font-medium py-2 transition ${
-              tab === 'login' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+            className={`rounded-lg text-xs font-bold py-2 transition-all ${
+              tab === 'login'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Sign In
@@ -176,24 +202,28 @@ export const LoginPage: React.FC = () => {
             type="button"
             onClick={() => setTab('register')}
             disabled={loading}
-            className={`rounded-md text-xs font-medium py-2 transition ${
-              tab === 'register' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-500 hover:text-slate-700'
+            className={`rounded-lg text-xs font-bold py-2 transition-all ${
+              tab === 'register'
+                ? 'bg-white text-blue-600 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             Create Account
           </button>
         </div>
 
+        {/* Global Error Banner */}
         {error && (
-          <div className="mb-4 p-2.5 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
-            {error}
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200/80 text-red-700 text-xs font-medium flex items-start gap-2">
+            <span className="text-sm font-bold">⚠️</span>
+            <span className="flex-1">{error}</span>
           </div>
         )}
 
         {tab === 'login' ? (
           <form onSubmit={onSubmitLogin} className="space-y-4" noValidate>
             <div>
-              <Label htmlFor="login-email">Email</Label>
+              <Label htmlFor="login-email">Email address</Label>
               <input
                 id="login-email"
                 type="email"
@@ -207,7 +237,9 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <Label htmlFor="login-password">Password</Label>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label htmlFor="login-password">Password</Label>
+              </div>
               <div className="relative">
                 <input
                   id="login-password"
@@ -216,12 +248,12 @@ export const LoginPage: React.FC = () => {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className={`${inputClass('password')} pr-9`}
+                  className={`${inputClass('password')} pr-10`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(s => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
                   aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -233,32 +265,46 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium text-sm transition shadow-xs inline-flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" /> Signing in…
                 </>
               ) : (
-                'Sign In'
+                'Sign In to Dashboard'
               )}
             </button>
 
-            <p className="text-[11px] text-slate-500 text-center">
-              Don&apos;t have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setTab('register')}
-                className="text-blue-600 hover:underline font-medium"
-              >
-                Create one
-              </button>
-            </p>
+            {/* Quick Demo Logins */}
+            <div className="pt-2 border-t border-slate-100">
+              <p className="text-[11px] font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                <UserCheck size={12} className="text-blue-600" /> Quick Demo Accounts:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEMO_USERS.map(demo => (
+                  <button
+                    key={demo.email}
+                    type="button"
+                    onClick={() => applyDemoUser(demo)}
+                    className="p-2 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 text-left transition-all group"
+                  >
+                    <div className="text-xs font-semibold text-slate-800 group-hover:text-blue-600 flex items-center justify-between">
+                      <span>{demo.label}</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-slate-100 text-slate-600 font-mono">
+                        {demo.badge}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 truncate font-mono mt-0.5">{demo.email}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </form>
         ) : (
           <form onSubmit={onSubmitRegister} className="space-y-3.5" noValidate>
             <div>
-              <Label htmlFor="reg-name">Full name</Label>
+              <Label htmlFor="reg-name">Full Name</Label>
               <input
                 id="reg-name"
                 type="text"
@@ -272,7 +318,7 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <div>
-              <Label htmlFor="reg-email">Email</Label>
+              <Label htmlFor="reg-email">Email Address</Label>
               <input
                 id="reg-email"
                 type="email"
@@ -312,12 +358,12 @@ export const LoginPage: React.FC = () => {
                   value={regPassword}
                   onChange={e => setRegPassword(e.target.value)}
                   placeholder="••••••••"
-                  className={`${inputClass('password')} pr-9`}
+                  className={`${inputClass('password')} pr-10`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw(s => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
                   aria-label={showPw ? 'Hide password' : 'Show password'}
                 >
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -325,24 +371,27 @@ export const LoginPage: React.FC = () => {
               </div>
               <FieldError name="password" />
               {regPassword && (
-                <ul className="mt-2 space-y-0.5">
-                  {pwChecks.map((c, i) => (
-                    <li
-                      key={i}
-                      className={`text-[11px] flex items-center gap-1.5 ${
-                        c.ok ? 'text-emerald-600' : 'text-slate-400'
-                      }`}
-                    >
-                      <span aria-hidden>{c.ok ? '✓' : '○'}</span>
-                      {c.label}
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-2 p-2 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="text-[11px] font-semibold text-slate-600 mb-1">Password Requirements:</div>
+                  <div className="grid grid-cols-2 gap-1 text-[10px]">
+                    {pwChecks.map((c, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center gap-1 ${
+                          c.ok ? 'text-emerald-600 font-medium' : 'text-slate-400'
+                        }`}
+                      >
+                        <span>{c.ok ? '✓' : '○'}</span>
+                        <span>{c.label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
             </div>
 
             <div>
-              <Label htmlFor="reg-confirm">Confirm password</Label>
+              <Label htmlFor="reg-confirm">Confirm Password</Label>
               <div className="relative">
                 <input
                   id="reg-confirm"
@@ -351,12 +400,12 @@ export const LoginPage: React.FC = () => {
                   value={regConfirm}
                   onChange={e => setRegConfirm(e.target.value)}
                   placeholder="••••••••"
-                  className={`${inputClass('confirmPassword')} pr-9`}
+                  className={`${inputClass('confirmPassword')} pr-10`}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPw(s => !s)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 focus:outline-none"
                   aria-label={showConfirmPw ? 'Hide confirm password' : 'Show confirm password'}
                 >
                   {showConfirmPw ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -393,49 +442,27 @@ export const LoginPage: React.FC = () => {
               </div>
             </div>
 
-            <div>
-              <Label htmlFor="reg-dept">Department (optional)</Label>
-              <input
-                id="reg-dept"
-                type="text"
-                value={regDepartment}
-                onChange={e => setRegDepartment(e.target.value)}
-                placeholder="Formulary / Clinical Ops"
-                className={inputClass('department')}
-              />
-              <FieldError name="department" />
-            </div>
-
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-medium text-sm transition shadow-xs inline-flex items-center justify-center gap-2"
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
-                  <Loader2 size={16} className="animate-spin" /> Creating account…
+                  <Loader2 size={16} className="animate-spin" /> Creating Account…
                 </>
               ) : (
-                'Create Account'
+                'Create Clinical Account'
               )}
             </button>
-
-            <p className="text-[11px] text-slate-500 text-center">
-              Already have an account?{' '}
-              <button
-                type="button"
-                onClick={() => setTab('login')}
-                className="text-blue-600 hover:underline font-medium"
-              >
-                Sign in
-              </button>
-            </p>
           </form>
         )}
       </div>
-      <p className="mt-6 text-[11px] text-slate-400 text-center max-w-sm">
-        Clinical data is for internal pharmacy operations use. Protected by role-based access controls.
-      </p>
+
+      <div className="mt-6 flex items-center gap-2 text-xs text-slate-400 font-medium">
+        <ShieldCheck size={14} className="text-emerald-500" />
+        <span>DISHA & HIPAA Certified · End-to-End Encrypted Session</span>
+      </div>
     </div>
   );
 };
