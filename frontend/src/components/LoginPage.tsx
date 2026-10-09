@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Eye, EyeOff, Loader2, Pill, ShieldCheck, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useGoogleOAuth } from '../context/GoogleOAuthContext';
+import { GoogleSignInButton } from './GoogleSignInButton';
 import { UserRole } from '../types';
+import { api } from '../api';
 
 type TabMode = 'login' | 'register';
 
@@ -47,10 +50,13 @@ const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const LoginPage: React.FC = () => {
   const { login, register, loading, error, fieldErrors, clearError } = useAuth();
+  const { isReady: isGoogleOAuthReady } = useGoogleOAuth();
 
   const [tab, setTab] = useState<TabMode>('login');
   const [showPw, setShowPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState('');
 
   const [email, setEmail] = useState('priya.sharma@apollo.in');
   const [password, setPassword] = useState('Password123!');
@@ -120,6 +126,35 @@ export const LoginPage: React.FC = () => {
     } catch {
       /* Handled in AuthContext */
     }
+  };
+
+  const handleGoogleSuccess = async (credential: string) => {
+    try {
+      setGoogleLoading(true);
+      setGoogleError('');
+      
+      // Send credential to backend for verification
+      const response = await api.post('/auth/google/verify', { credential });
+      
+      if (response.success && response.token) {
+        // Store token and user
+        localStorage.setItem('sastarx_auth_token', response.token);
+        localStorage.setItem('sastarx_current_user', JSON.stringify(response.user));
+        
+        // Reload page to reinitialize app with authenticated user
+        window.location.reload();
+      }
+    } catch (err: any) {
+      console.error('Google Sign-In failed:', err);
+      setGoogleError(err.message || 'Google Sign-In failed. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGoogleError = (error: any) => {
+    console.error('Google Sign-In error:', error);
+    setGoogleError('Google Sign-In failed. Please try again.');
   };
 
   const onSubmitRegister = async (ev: React.FormEvent) => {
@@ -264,7 +299,7 @@ export const LoginPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || googleLoading}
               className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm transition-all shadow-md shadow-blue-600/25 flex items-center justify-center gap-2"
             >
               {loading ? (
@@ -275,6 +310,31 @@ export const LoginPage: React.FC = () => {
                 'Sign In to Dashboard'
               )}
             </button>
+
+            {/* Google Sign-In */}
+            {isGoogleOAuthReady && (
+              <>
+                <div className="relative py-3">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-slate-200"></div>
+                  </div>
+                  <div className="relative flex justify-center text-xs">
+                    <span className="px-2 bg-white text-slate-500 font-medium">Or continue with</span>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <GoogleSignInButton
+                    onSuccess={handleGoogleSuccess}
+                    onError={handleGoogleError}
+                    useOneTap={true}
+                  />
+                  {googleError && (
+                    <p className="mt-2 text-xs text-red-600 text-center">{googleError}</p>
+                  )}
+                </div>
+              </>
+            )}
 
             {/* Quick Demo Logins */}
             <div className="pt-2 border-t border-slate-100">

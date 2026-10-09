@@ -32,14 +32,22 @@ model Tenant {
 model User {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   email         String   @unique
-  passwordHash  String
+  passwordHash  String?  // Optional for OAuth users
   name          String
   role          String   @default("Clinical Pharmacist")
   title         String   @default("Healthcare Practitioner")
   licenseNumber String?
   department    String?
   phone         String?
+  
+  // OAuth fields
+  provider      String?  @default("local") // "local", "google"
+  googleId      String?  @unique
+  profilePicture String?
+  emailVerified Boolean  @default(false)
+  
   joinedAt      DateTime @default(now())
+  lastLoginAt   DateTime @default(now())
 
   tenantId      String   @db.ObjectId
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)

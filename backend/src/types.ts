@@ -213,5 +213,12 @@ export interface UserAccount {
   department?: string;
   phone?: string;
   joinedAt: string;
+  lastLoginAt?: string;
   password?: string; // used for demo auth verification
+  
+  // OAuth fields
+  provider?: string; // 'local' | 'google'
+  googleId?: string;
+  profilePicture?: string;
+  emailVerified?: boolean;
 }

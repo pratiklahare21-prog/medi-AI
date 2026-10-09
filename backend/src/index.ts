@@ -26,10 +26,13 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import passport from 'passport';
+import { configurePassport } from './config/passport';
 import { tenantContext } from './middleware/tenant';
 import { authRateLimiter, aiRateLimiter, generalRateLimiter } from './middleware/rateLimiter';
 import { sanitizeBody } from './middleware/sanitize';
 import { authRouter } from './routes/auth';
+import { oauthRouter } from './routes/oauth';
 import { catalogRouter } from './routes/catalog';
 import { feedsRouter } from './routes/feeds';
 import { disputesRouter } from './routes/disputes';
@@ -42,6 +45,9 @@ import { aiRouter } from './routes/ai';
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = '0.0.0.0';
+
+// Configure Passport for OAuth
+configurePassport();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CORS — restricted to FRONTEND_URL (credentials allowed)
@@ -58,6 +64,9 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json());
+
+// Initialize Passport
+app.use(passport.initialize());
 
 // Security headers via Helmet (CSP, HSTS, X-Frame-Options, etc.)
 app.use(helmet({
@@ -109,6 +118,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // Mount modular route handlers
 app.use('/api/auth', authRateLimiter, authRouter);
+app.use('/api/auth', authRateLimiter, oauthRouter); // OAuth routes (Google)
 app.use('/api/catalog', catalogRouter);
 app.use('/api/feeds', feedsRouter);
 app.use('/api/disputes', disputesRouter);

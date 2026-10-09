@@ -53,6 +53,103 @@ class DatabaseManager {
     return this.data.users.find(u => u.id === id);
   }
 
+  public async getUserByGoogleId(googleId: string): Promise<DbUser | undefined> {
+    return this.data.users.find(u => u.googleId === googleId);
+  }
+
+  public async createOAuthUser(newUser: {
+    email: string;
+    name: string;
+    googleId: string;
+    profilePicture?: string;
+    provider: string;
+    emailVerified: boolean;
+    role: string;
+    title: string;
+    tenantId: string;
+    tenantName: string;
+  }): Promise<UserAccount> {
+    const existing = await this.getUserByEmail(newUser.email);
+    if (existing) {
+      throw new Error(`User with email ${newUser.email} already exists`);
+    }
+
+    const user: DbUser = {
+      ...newUser,
+      id: `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      joinedAt: 'Just now',
+      lastLoginAt: 'Just now',
+      passwordHash: '', // No password for OAuth users
+      licenseNumber: undefined,
+      department: undefined,
+      phone: undefined,
+    };
+
+    this.data.users.unshift(user);
+
+    // Auto-log OAuth user registration
+    await this.addAuditLog({
+      action: 'NEW_OAUTH_USER_REGISTERED',
+      actor: user.name,
+      role: user.role,
+      targetEntity: `OAuth account created via ${user.provider} for ${user.email} (Tenant: ${user.tenantName})`,
+      tenantId: user.tenantId,
+      tenantName: user.tenantName,
+      status: 'Audited'
+    });
+
+    const { passwordHash: _p, ...safeUser } = user;
+    return safeUser;
+  }
+
+  public async linkGoogleAccount(userId: string, googleData: {
+    googleId: string;
+    profilePicture?: string;
+    emailVerified: boolean;
+  }): Promise<DbUser> {
+    const user = this.data.users.find(u => u.id === userId);
+    if (!user) {
+      throw new Error(`User ${userId} not found`);
+    }
+
+    user.googleId = googleData.googleId;
+    user.profilePicture = googleData.profilePicture;
+    user.emailVerified = googleData.emailVerified;
+    user.provider = 'google';
+    user.lastLoginAt = 'Just now';
+
+    await this.addAuditLog({
+      action: 'LINK_GOOGLE_ACCOUNT',
+      actor: user.name,
+      role: user.role,
+      targetEntity: `Linked Google OAuth account to existing user ${user.email}`,
+      tenantId: user.tenantId,
+      tenantName: user.tenantName,
+      status: 'Audited'
+    });
+
+    return user;
+  }
+
+  public async updateUserProfile(userId: string, updates: {
+    profilePicture?: string;
+    lastLoginAt?: Date;
+  }): Promise<DbUser> {
+    const user = this.data.users.find(u => u.id === userId);
+    if (!user) {
+      throw new Error(`User ${userId} not found`);
+    }
+
+    if (updates.profilePicture) {
+      user.profilePicture = updates.profilePicture;
+    }
+    if (updates.lastLoginAt) {
+      user.lastLoginAt = 'Just now';
+    }
+
+    return user;
+  }
+
   public async createUser(newUser: Omit<UserAccount, 'id' | 'joinedAt'> & { password: string; joinedAt?: string }): Promise<UserAccount> {
     const existing = await this.getUserByEmail(newUser.email);
     if (existing) {
